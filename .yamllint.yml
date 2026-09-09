@@ -4,4 +4,4 @@ rules:
   line-length: disable
   document-start: disable
   truthy:
-    allowed-values: ["true", "false", "on"] # "on:" is the workflow trigger key
+    allowed-values: ["true", "false", "on"]  # "on:" is the workflow trigger key

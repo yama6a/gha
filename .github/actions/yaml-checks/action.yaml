@@ -16,7 +16,7 @@ runs:
       shell: bash
       run: pipx run yamllint -c ${{ inputs.yamllint-config }} ${{ inputs.path }}
 
-    - name: actionlint # lints workflow files, and shellchecks their run: blocks
+    - name: actionlint  # lints workflow files, and shellchecks their run: blocks
       shell: bash
       run: |
         curl -fsSL https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz \

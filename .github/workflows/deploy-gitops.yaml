@@ -26,8 +26,8 @@ on:
 jobs:
   deploy:
     runs-on: ubuntu-latest
-    timeout-minutes: 10 # it does not wait for the target's CI, so this is just a hang guard
-    permissions: {} # nothing from the caller repo is needed; DEPLOY_TOKEN carries the rights
+    timeout-minutes: 10  # it does not wait for the target's CI, so this is just a hang guard
+    permissions: {}  # nothing from the caller repo is needed; DEPLOY_TOKEN carries the rights
     env:
       # Not GITHUB_TOKEN: it cannot reach another repo at all, and a PR opened with it gets no CI
       # run, so the merge below would never be armed.
@@ -65,7 +65,7 @@ jobs:
           fi
 
           git commit -qam "Deploy ${name}:${TAG}"
-          git push -q --force origin "$branch" # force so re-running a failed deploy is idempotent
+          git push -q --force origin "$branch"  # force so re-running a failed deploy is idempotent
 
           pr=$(gh pr list --repo "$TARGET" --head "$branch" --state open --json url --jq '.[0].url // empty')
           if [ -z "$pr" ]; then
