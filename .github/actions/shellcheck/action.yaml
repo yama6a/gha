@@ -1,0 +1,27 @@
+name: Shellcheck
+description: Runs shellcheck over a glob of shell scripts.
+inputs:
+  glob:
+    description: Glob of shell files to check, e.g. lib/shell/*.sh
+    required: true
+  severity:
+    description: Minimum severity to report
+    required: false
+    default: warning
+  exclude:
+    description: Comma-separated shellcheck codes to exclude, e.g. SC2034,SC2086
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    - name: shellcheck
+      shell: bash
+      run: |
+        exclude_args=()
+        if [ -n "${{ inputs.exclude }}" ]; then
+          IFS=',' read -ra codes <<< "${{ inputs.exclude }}"
+          for c in "${codes[@]}"; do exclude_args+=(-e "$c"); done
+        fi
+        # shellcheck disable=SC2248
+        shellcheck -S "${{ inputs.severity }}" "${exclude_args[@]}" ${{ inputs.glob }}

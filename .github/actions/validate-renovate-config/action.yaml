@@ -1,0 +1,13 @@
+name: Validate renovate config
+description: Renovate silently falls back to its defaults on a broken config, so validate it explicitly in CI.
+inputs:
+  config-file:
+    description: Path to the renovate config file; empty lets renovate-config-validator auto-discover it
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    - name: Validate renovate config
+      shell: bash
+      run: npx --yes --package renovate -- renovate-config-validator --strict ${{ inputs.config-file }}

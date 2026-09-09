@@ -1,0 +1,68 @@
+name: Go PR CI (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      go-version-file:
+        type: string
+        default: go.mod
+      golangci-args:
+        type: string
+        default: --timeout 5m ./...
+      tidy-check:
+        description: Fail if go mod tidy would change go.mod/go.sum
+        type: boolean
+        default: false
+      race:
+        description: Run go test with -race
+        type: boolean
+        default: false
+      coverage:
+        description: Run go test with a coverage profile and print the summary
+        type: boolean
+        default: false
+
+jobs:
+  check:
+    name: golangci-lint - go vet - go test - govulncheck
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Go
+        uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: ${{ inputs.go-version-file }}
+          cache: true
+
+      # A stale go.mod/go.sum still builds, so nothing else here would catch it.
+      - name: go mod tidy is committed
+        if: inputs.tidy-check
+        run: |
+          go mod tidy
+          git diff --exit-code -- go.mod go.sum \
+            || { echo "::error::go.mod/go.sum are not tidy; run 'go mod tidy' and commit"; exit 1; }
+
+      - name: Install govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@latest
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Run govulncheck
+        run: govulncheck ./...
+
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a # v9.3.0
+        with:
+          args: ${{ inputs.golangci-args }}
+
+      - name: Run go vet
+        run: go vet ./...
+
+      - name: Run go test
+        run: go test ./... -v ${{ inputs.race && '-race' || '' }} ${{ inputs.coverage && '-coverprofile=cover.out' || '' }}
+
+      - name: Coverage summary
+        if: inputs.coverage
+        run: go tool cover -func=cover.out | tail -1

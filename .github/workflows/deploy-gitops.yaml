@@ -1,0 +1,85 @@
+name: Deploy to GitOps (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        description: Image tag to deploy
+        type: string
+        required: true
+      values-path:
+        description: Path to the values.yaml in the target repo that pins the image tag
+        type: string
+        required: true
+      target-repo:
+        description: GitOps repo to open the deploy PR against
+        type: string
+        default: yama6a/offgrid-private
+      target-branch:
+        description: Base branch in the target repo
+        type: string
+        default: main
+    secrets:
+      DEPLOY_TOKEN:
+        required: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10 # it does not wait for the target's CI, so this is just a hang guard
+    permissions: {} # nothing from the caller repo is needed; DEPLOY_TOKEN carries the rights
+    env:
+      # Not GITHUB_TOKEN: it cannot reach another repo at all, and a PR opened with it gets no CI
+      # run, so the merge below would never be armed.
+      GH_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+      IMAGE: ghcr.io/${{ github.repository }}
+      TAG: ${{ inputs.tag }}
+      TARGET: ${{ inputs.target-repo }}
+      TARGET_BRANCH: ${{ inputs.target-branch }}
+      VALUES: ${{ inputs.values-path }}
+    steps:
+      - name: Bump the image tag in the GitOps repo
+        run: |
+          set -euo pipefail
+          name="${GITHUB_REPOSITORY##*/}"
+          branch="deploy/${name}-${TAG}"
+
+          git clone --depth 1 --branch "$TARGET_BRANCH" "https://x-access-token:${GH_TOKEN}@github.com/${TARGET}.git" gitops
+          cd gitops
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git switch -c "$branch"
+
+          # Substring-replace the tag rather than rewriting the YAML: `yq -i` reformats the whole file
+          # (drops every blank line, re-flows inline maps), which would bury a one-line bump in noise.
+          # Anchored on the surrounding quotes and matched on the image name rather than a values key,
+          # so renaming a key cannot silently break this and one deployed app cannot match another.
+          esc="${IMAGE//./\\.}"
+          sed -i -E "s|\"${esc}:[^\"]*\"|\"${IMAGE}:${TAG}\"|g" "$VALUES"
+
+          # Without this, a chart move would report a successful deploy while the cluster kept the old
+          # image, which looks identical to a healthy deploy from the outside.
+          if git diff --quiet -- "$VALUES"; then
+            echo "::error::nothing in $VALUES pointed at ${IMAGE} (already ${TAG}, or the chart moved)"
+            exit 1
+          fi
+
+          git commit -qam "Deploy ${name}:${TAG}"
+          git push -q --force origin "$branch" # force so re-running a failed deploy is idempotent
+
+          pr=$(gh pr list --repo "$TARGET" --head "$branch" --state open --json url --jq '.[0].url // empty')
+          if [ -z "$pr" ]; then
+            pr=$(gh pr create --repo "$TARGET" --base "$TARGET_BRANCH" --head "$branch" \
+                   --title "Deploy ${name}:${TAG}" \
+                   --body "Automated from ${GITHUB_REPOSITORY}@${GITHUB_SHA}. Image: \`${IMAGE}:${TAG}\`")
+          fi
+          echo "PR: $pr"
+
+          # Queue the merge behind the target's required checks and stop, rather than burning runner
+          # minutes watching them. The trade: this job goes green as soon as the merge is armed, so a
+          # failure there leaves the PR open and silent. A forgotten open PR is a tag pinned at an old
+          # version, so watch for them.
+          # On a re-run the checks may already be green, and GitHub rejects --auto when there is nothing
+          # left to wait for, so fall back to merging outright. Protection still blocks a red PR.
+          gh pr merge "$pr" --repo "$TARGET" --auto --squash --delete-branch \
+            || gh pr merge "$pr" --repo "$TARGET" --squash --delete-branch

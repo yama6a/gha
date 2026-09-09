@@ -1,0 +1,24 @@
+name: YAML and workflow lint
+description: Runs yamllint against the repo and actionlint against its workflow files.
+inputs:
+  yamllint-config:
+    description: Path to the yamllint config
+    required: false
+    default: .yamllint.yml
+  path:
+    description: Path to lint with yamllint
+    required: false
+    default: .
+runs:
+  using: composite
+  steps:
+    - name: yamllint
+      shell: bash
+      run: pipx run yamllint -c ${{ inputs.yamllint-config }} ${{ inputs.path }}
+
+    - name: actionlint # lints workflow files, and shellchecks their run: blocks
+      shell: bash
+      run: |
+        curl -fsSL https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz \
+          | tar xz actionlint
+        ./actionlint -color
