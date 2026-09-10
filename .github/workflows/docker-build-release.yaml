@@ -28,6 +28,7 @@ on:
 jobs:
   build-push:
     runs-on: ubuntu-latest
+    # A reusable workflow's jobs can request only what the caller grants here.
     permissions:
       contents: write  # required to create the GitHub release
       packages: write  # required, or the image push fails with permission_denied

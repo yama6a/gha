@@ -55,6 +55,7 @@ jobs:
       matrix:
         include: ${{ fromJson(inputs.platforms) }}
     runs-on: ${{ matrix.runner }}
+    # A reusable workflow's jobs can request only what the caller grants here.
     permissions:
       packages: write  # required to push by digest, or the image push fails with permission_denied
     steps:
@@ -107,6 +108,7 @@ jobs:
   merge:
     needs: [version, build]
     runs-on: ubuntu-latest
+    # A reusable workflow's jobs can request only what the caller grants here.
     permissions:
       contents: write  # required to create the GitHub release
       packages: write  # required to push the manifest list

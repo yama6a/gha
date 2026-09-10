@@ -87,8 +87,9 @@ jobs:
       # node-version: '24'
 ```
 
-Needs `contents: write` and `packages: write` available to the caller's `GITHUB_TOKEN`
-(repo Settings > Actions > General > Workflow permissions).
+A reusable workflow's `permissions:` block is a ceiling, not a grant: the caller also needs
+`contents: write` and `packages: write` on its `GITHUB_TOKEN` (repo Settings > Actions >
+General > Workflow permissions, or a `permissions:` block on the calling job).
 
 Does not cover a build that cannot run under QEMU (e.g. `next build`, which SIGILLs under
 emulation) - use `docker-build-release-multiarch.yaml` for that.
@@ -110,7 +111,9 @@ jobs:
       #    {"platform":"linux/arm64","runner":"ubuntu-24.04-arm"}]   # default
 ```
 
-Needs `contents: write` and `packages: write` available to the caller's `GITHUB_TOKEN`.
+A reusable workflow's `permissions:` block is a ceiling, not a grant: the caller also needs
+`contents: write` and `packages: write` on its `GITHUB_TOKEN` (repo Settings > Actions >
+General > Workflow permissions, or a `permissions:` block on the calling job).
 
 ### `go-ci.yaml`
 
