@@ -78,6 +78,11 @@ site or SPA the Dockerfile only `COPY`s), builds and pushes a multi-arch image t
 GitHub release. Outputs `version` for a following `deploy-gitops.yaml` call.
 
 ```yaml
+# A reusable workflow's jobs can request only what the caller grants here.
+permissions:
+  contents: write
+  packages: write
+
 jobs:
   build-push:
     uses: yama6a/gha/.github/workflows/docker-build-release.yaml@v1
@@ -86,10 +91,6 @@ jobs:
       # build-command: npm ci && npm run build
       # node-version: '24'
 ```
-
-A reusable workflow's `permissions:` block is a ceiling, not a grant: the caller also needs
-`contents: write` and `packages: write` on its `GITHUB_TOKEN` (repo Settings > Actions >
-General > Workflow permissions, or a `permissions:` block on the calling job).
 
 Does not cover a build that cannot run under QEMU (e.g. `next build`, which SIGILLs under
 emulation) - use `docker-build-release-multiarch.yaml` for that.
@@ -100,6 +101,11 @@ Same job as above, but each platform builds on its own native runner and the res
 are joined into one manifest list. Use when the build cannot run under QEMU emulation.
 
 ```yaml
+# A reusable workflow's jobs can request only what the caller grants here.
+permissions:
+  contents: write
+  packages: write
+
 jobs:
   build-push:
     uses: yama6a/gha/.github/workflows/docker-build-release-multiarch.yaml@v1
@@ -110,10 +116,6 @@ jobs:
       #   [{"platform":"linux/amd64","runner":"ubuntu-latest"},
       #    {"platform":"linux/arm64","runner":"ubuntu-24.04-arm"}]   # default
 ```
-
-A reusable workflow's `permissions:` block is a ceiling, not a grant: the caller also needs
-`contents: write` and `packages: write` on its `GITHUB_TOKEN` (repo Settings > Actions >
-General > Workflow permissions, or a `permissions:` block on the calling job).
 
 ### `go-ci.yaml`
 
