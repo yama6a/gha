@@ -146,6 +146,8 @@ jobs:
       # test: false           # e.g. a repo with no test script yet
       # build-env: |
       #   NEXT_PUBLIC_USE_MOCK_DATA=true
+      # working-directory: web            # frontend not at the repo root
+      # pre-check: make generate          # monorepo codegen a check depends on
 ```
 
 Assumes the standard script names: `lint`, `typecheck`, `test`, `build`. A repo whose scripts
