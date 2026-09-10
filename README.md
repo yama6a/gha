@@ -90,6 +90,7 @@ jobs:
       dockerfile: .build/Dockerfile   # default: Dockerfile
       # build-command: npm ci && npm run build
       # node-version: '24'
+      # package-manager: pnpm   # default: npm; only affects which setup-node cache/lockfile it looks for
 ```
 
 Does not cover a build that cannot run under QEMU (e.g. `next build`, which SIGILLs under
