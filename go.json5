@@ -1,0 +1,8 @@
+{
+  // Go repos. Extend it with "github>yama6a/gha:go.json5", alongside the default preset.
+  // gomodTidy: a bump can leave transitive requirements stale in go.mod.
+  // gomodUpdateImportPaths: a Go major lives at a new import path (backoff/v4 -> backoff/v5), and
+  // nothing else rewrites the importing source.
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "postUpdateOptions": ["gomodTidy", "gomodUpdateImportPaths"]
+}

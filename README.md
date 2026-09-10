@@ -3,6 +3,9 @@
 Shared GitHub Actions workflows and composite actions for yama6a repos. Pin every reference
 to a tagged release (`@v1`), not `@main`.
 
+This repo also hosts the shared Renovate presets, which are referenced by content rather than
+by tag. See [Renovate presets](#renovate-presets).
+
 ## Reusable workflows
 
 ### `renovate.yaml`
@@ -152,6 +155,37 @@ jobs:
 
 Assumes the standard script names: `lint`, `typecheck`, `test`, `build`. A repo whose scripts
 are named differently renames the script rather than adding an override here.
+
+## Renovate presets
+
+Three preset files at the repo root, so a consuming repo's `renovate.json5` holds only the rules
+that are actually about that repo.
+
+| preset | extends value | contents |
+|---|---|---|
+| `default.json5` | `github>yama6a/gha:default.json5` | `config:recommended`, dependency dashboard, digest pinning for actions and base images, the combined non-major auto-merged PR, and auto-merged GHA majors |
+| `go.json5` | `github>yama6a/gha:go.json5` | `gomodTidy` + `gomodUpdateImportPaths` |
+| `node.json5` | `github>yama6a/gha:node.json5` | the vite and eslint major groupings, and the typescript 5.x hold |
+
+```json5
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: [
+    "github>yama6a/gha:default.json5",
+    "github>yama6a/gha:node.json5", // or :go.json5, or both
+  ],
+  packageRules: [
+    // only what is specific to this repo; these append after the preset's and win on any key they set
+  ],
+}
+```
+
+The filename is spelled out in every reference. The bare `github>yama6a/gha` form only ever looks
+for `default.json`, and a `.json` file carrying comments is deprecated by Renovate.
+
+References are **not** pinned to a tag, unlike the workflows above: an edit here reaches every repo
+on its next Renovate run. Dry-run a consuming repo (`workflow_dispatch` with `dryRun: true`) before
+merging a change to these files.
 
 ## Composite actions
 

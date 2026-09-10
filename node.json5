@@ -1,0 +1,36 @@
+{
+  // npm repos. Extend it with "github>yama6a/gha:node.json5", alongside the default preset.
+  // Only peer-coupled majors and version holds live here: a lone bump of either half fails `npm ci`
+  // with ERESOLVE, so they have to travel in one PR.
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "packageRules": [
+    {
+      // typescript-eslint 8 peers `typescript >=4.8.4 <6.1.0`, and TS 7 makes its parser throw
+      // outright, so a TS 7 bump takes `npm run lint` down. Lift this once typescript-eslint ships
+      // TS 7 support.
+      "description": "hold typescript on 5.x until typescript-eslint supports 7",
+      "matchPackageNames": ["typescript"],
+      "allowedVersions": "<6.0.0"
+    },
+    {
+      // @vitejs/plugin-react peers an exact vite major.
+      "description": "bump vite and its plugins in one PR",
+      "matchUpdateTypes": ["major"], // non-majors already ship together in the combined PR
+      "matchPackageNames": ["vite", "@vitejs/plugin-react", "@tailwindcss/vite"],
+      "groupName": "vite"
+    },
+    {
+      // eslint 10 needs typescript-eslint >= 8.67; older ones peer `eslint ^8 || ^9`.
+      "description": "bump eslint and its plugins in one PR",
+      "matchUpdateTypes": ["major"],
+      "matchPackageNames": [
+        "eslint",
+        "@eslint/js",
+        "typescript-eslint",
+        "eslint-plugin-react-hooks",
+        "eslint-plugin-react-refresh"
+      ],
+      "groupName": "eslint"
+    }
+  ]
+}
