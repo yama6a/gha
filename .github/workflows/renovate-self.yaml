@@ -1,0 +1,44 @@
+# Runs Renovate against THIS repo. renovate.yaml next to it is the reusable workflow every other
+# repo calls; this is the caller that points it back here, so gha's own action pins stay fresh.
+name: Renovate (self)
+
+on:
+  schedule:
+    # Automerge needs frequent runs: Renovate opens the PR on one run and merges it on the NEXT one (if CI passes).
+    - cron: "17 */3 * * *"
+  workflow_dispatch:
+    inputs:
+      logLevel:
+        description: Renovate log level
+        default: info
+        type: choice
+        options: [info, debug]
+      dryRun:
+        description: Dry run (extract + plan, open no PRs)
+        default: false
+        type: boolean
+  push:
+    branches: [main]
+    paths:  # fast feedback while iterating on the config or the presets
+      - renovate.json5
+      - default.json5
+      - go.json5
+      - node.json5
+      - .github/workflows/renovate-self.yaml
+
+concurrency:
+  group: renovate
+  cancel-in-progress: false
+
+jobs:
+  renovate:
+    # The local path form, not yama6a/gha@v1: a self-reference by tag would run whatever v1 pointed at
+    # rather than what is on this branch.
+    uses: ./.github/workflows/renovate.yaml
+    permissions:
+      contents: read  # Renovate acts through RENOVATE_TOKEN, not GITHUB_TOKEN
+    secrets:
+      RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
+    with:
+      log-level: ${{ inputs.logLevel || 'info' }}
+      dry-run: ${{ inputs.dryRun || false }}
