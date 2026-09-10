@@ -90,8 +90,27 @@ jobs:
 Needs `contents: write` and `packages: write` available to the caller's `GITHUB_TOKEN`
 (repo Settings > Actions > General > Workflow permissions).
 
-Does not cover bolan-fe's split-runner, digest-merge multi-arch build (needed there because
-`next build` dies under QEMU emulation) - that one stays repo-local.
+Does not cover a build that cannot run under QEMU (e.g. `next build`, which SIGILLs under
+emulation) - use `docker-build-release-multiarch.yaml` for that.
+
+### `docker-build-release-multiarch.yaml`
+
+Same job as above, but each platform builds on its own native runner and the resulting images
+are joined into one manifest list. Use when the build cannot run under QEMU emulation.
+
+```yaml
+jobs:
+  build-push:
+    uses: yama6a/gha/.github/workflows/docker-build-release-multiarch.yaml@v1
+    with:
+      build-args: |
+        NEXT_PUBLIC_API_URL_CLIENT=https://api.example.com
+      # platforms: >-
+      #   [{"platform":"linux/amd64","runner":"ubuntu-latest"},
+      #    {"platform":"linux/arm64","runner":"ubuntu-24.04-arm"}]   # default
+```
+
+Needs `contents: write` and `packages: write` available to the caller's `GITHUB_TOKEN`.
 
 ### `go-ci.yaml`
 
