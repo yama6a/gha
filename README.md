@@ -131,6 +131,26 @@ jobs:
       coverage: true
 ```
 
+### `node-ci.yaml`
+
+Lint, typecheck, test, audit, build - on by default, so a new repo never quietly ships
+without them. Disable the ones that don't apply.
+
+```yaml
+jobs:
+  ci:
+    uses: yama6a/gha/.github/workflows/node-ci.yaml@v1
+    with:
+      package-manager: pnpm   # default: npm
+      # typecheck: false      # e.g. a plain-JS repo with no tsconfig
+      # test: false           # e.g. a repo with no test script yet
+      # build-env: |
+      #   NEXT_PUBLIC_USE_MOCK_DATA=true
+```
+
+Assumes the standard script names: `lint`, `typecheck`, `test`, `build`. A repo whose scripts
+are named differently renames the script rather than adding an override here.
+
 ## Composite actions
 
 ### `actions/validate-renovate-config`

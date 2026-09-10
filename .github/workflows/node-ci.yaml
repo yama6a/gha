@@ -1,0 +1,87 @@
+name: Node PR CI (reusable)
+
+# Lint, typecheck, test, audit, build: the checks every JS/TS repo should run, so a new repo
+# never quietly ships without them. Enabled by default; disable the ones that don't apply
+# (e.g. a plain-JS static site sets typecheck: false, a repo with no tests sets test: false).
+# Anything repo-specific (e2e, translation checks, raw-color lint, ...) stays a local job.
+
+on:
+  workflow_call:
+    inputs:
+      node-version:
+        type: string
+        default: '24'
+      package-manager:
+        description: npm or pnpm
+        type: string
+        default: npm
+      lint:
+        type: boolean
+        default: true
+      typecheck:
+        type: boolean
+        default: true
+      test:
+        type: boolean
+        default: true
+      audit:
+        type: boolean
+        default: true
+      audit-level:
+        type: string
+        default: high
+      build:
+        type: boolean
+        default: true
+      build-env:
+        description: Newline-separated KEY=VALUE pairs, exported before the build step only
+        type: string
+        default: ''
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Set up pnpm
+        if: inputs.package-manager == 'pnpm'
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413  # v6.1.0
+
+      - name: Set up Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version: ${{ inputs.node-version }}
+          cache: ${{ inputs.package-manager }}
+
+      - name: Install dependencies
+        run: |
+          if [ "${{ inputs.package-manager }}" = pnpm ]; then
+            pnpm install --frozen-lockfile
+          else
+            npm ci
+          fi
+
+      - name: Lint
+        if: inputs.lint
+        run: ${{ inputs.package-manager }} run lint
+
+      - name: Typecheck
+        if: inputs.typecheck
+        run: ${{ inputs.package-manager }} run typecheck
+
+      - name: Test
+        if: inputs.test
+        run: ${{ inputs.package-manager }} run test
+
+      - name: Audit
+        if: inputs.audit
+        run: ${{ inputs.package-manager }} audit --audit-level=${{ inputs.audit-level }}
+
+      - name: Set build env
+        if: inputs.build && inputs.build-env != ''
+        run: echo "${{ inputs.build-env }}" >> "$GITHUB_ENV"
+
+      - name: Build
+        if: inputs.build
+        run: ${{ inputs.package-manager }} run build
