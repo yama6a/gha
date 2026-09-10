@@ -20,6 +20,10 @@ on:
         description: Node version to set up before build-command; empty skips node setup
         type: string
         default: ''
+      package-manager:
+        description: npm or pnpm; only used to pick setup-node's cache, empty when node-version is
+        type: string
+        default: npm
     outputs:
       version:
         description: The release version that was built and pushed
@@ -47,12 +51,29 @@ jobs:
           echo "Latest release: ${latest:-<none>} -> next: $next"
           echo "version=$next" >> "$GITHUB_OUTPUT"
 
+      - name: Set up pnpm
+        if: inputs.node-version != '' && inputs.package-manager == 'pnpm'
+        uses: pnpm/action-setup@ea17c68df8912ef543352723c149a84f56e3d413  # v6.1.0
+
+      # setup-node's cache shells out to `pnpm store path`, so pnpm has to be on PATH first, and it
+      # hard-errors if the cache it's told to use can't find a matching lockfile at all.
+      - name: Determine lockfile path
+        if: inputs.node-version != ''
+        id: lockfile
+        run: |
+          if [ "${{ inputs.package-manager }}" = pnpm ]; then
+            echo "path=pnpm-lock.yaml" >> "$GITHUB_OUTPUT"
+          else
+            echo "path=package-lock.json" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Set up Node
         if: inputs.node-version != ''
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
         with:
           node-version: ${{ inputs.node-version }}
-          cache: npm
+          cache: ${{ inputs.package-manager }}
+          cache-dependency-path: ${{ steps.lockfile.outputs.path }}
 
       # Built here, not in the Dockerfile: the image only COPYs the build output, so this runs once on the
       # runner instead of once per target arch under emulation.
