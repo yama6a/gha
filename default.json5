@@ -1,0 +1,54 @@
+{
+  // Shared Renovate base for yama6a repos. Extend it with "github>yama6a/gha:default.json5".
+  // The filename is spelled out because the bare "github>yama6a/gha" form only ever looks for
+  // default.json, and a .json file carrying comments is deprecated.
+  // Repo-specific rules go in the repo's own renovate.json5: extends resolves first, so a local
+  // packageRule appended after this one wins on any key it sets.
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    ":dependencyDashboard", // one issue listing every pending/failed update (needs repo Issues enabled)
+    "helpers:pinGitHubActionDigestsToSemver" // action pins carry a readable version alongside the digest
+  ],
+  "prConcurrentLimit": 12,
+  "prHourlyLimit": 0, // no hourly throttle
+  "dependencyDashboardTitle": "Renovate dependency dashboard",
+
+  // Automerge through Renovate's own API call, not GitHub's native auto-merge. Renovate waits for the
+  // branch status either way, which is the only gate in repos without required checks. The merge
+  // therefore lands on a LATER run once CI is green, which is why the workflow cron runs every 3h.
+  "platformAutomerge": false,
+
+  "packageRules": [
+    {
+      "description": "combine all non-major updates into one auto-merged PR",
+      "matchUpdateTypes": ["minor", "patch", "digest", "pin", "lockFileMaintenance"],
+      "groupName": "all non-major dependencies",
+      "automerge": true
+    },
+    {
+      // Routine action refreshes arrive as `digest` and ride the group above. A major moves the tag
+      // comment too, so it lands here instead: its own PR, still automerged.
+      // WARNING: PR CI only exercises ci.yaml. A major bump to an action used solely in a build,
+      // release or renovate workflow merges without ever having run, and surfaces at the next deploy.
+      "description": "github action majors: their own auto-merged PR",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["major"],
+      "groupName": "github actions (major)",
+      "automerge": true
+    },
+    {
+      // So a moving tag cannot swap an action's code under us.
+      "description": "pin github action refs to digests",
+      "matchManagers": ["github-actions"],
+      "pinDigests": true
+    },
+    {
+      // Rolling base image tags move their contents underneath, so a digest is the only thing Renovate
+      // can track. Inert in a repo with no Dockerfile, so it lives here rather than in a language preset.
+      "description": "pin base images to digests",
+      "matchManagers": ["dockerfile"],
+      "pinDigests": true
+    }
+  ]
+}
