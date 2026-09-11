@@ -33,7 +33,7 @@ env:
 jobs:
   # Resolved once, so every architecture publishes under the same tag.
   version:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -107,7 +107,7 @@ jobs:
   # Joins the per-arch digests into one manifest list, which is what a multi-arch tag actually is.
   merge:
     needs: [version, build]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     # A reusable workflow's jobs can request only what the caller grants here.
     permissions:
       contents: write  # required to create the GitHub release

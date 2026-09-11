@@ -18,7 +18,8 @@ workflow file to own the triggers (`schedule`, `workflow_dispatch`, `push`).
 name: Renovate
 on:
   schedule:
-    - cron: "17 */3 * * *"
+    - cron: "13 5 * * *"  # opens PRs
+    - cron: "43 5 * * *"  # merges the ones whose CI went green
   workflow_dispatch:
     inputs:
       logLevel:
