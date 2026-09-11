@@ -1,0 +1,14 @@
+{
+  // This repo hosts the shared presets and extends its own default. Renovate fetches the preset over
+  // the API from the default branch, so it resolves independently of the checkout.
+  // Which manager owns what:
+  //   github-actions  the action pins in .github/workflows/*.yaml and .github/actions/*/action.yaml
+  // Cadence is the cron in .github/workflows/renovate.yaml, not an internal `schedule`, so a manual
+  // workflow_dispatch works too.
+  //
+  // WARNING: an automerged bump here changes what every consuming repo runs, because they reference
+  // this repo's reusable workflows by the floating @v1 tag. The tag has to be moved by hand for a
+  // merged bump to actually reach them, which is the gate.
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: ["github>yama6a/gha:default.json5"],
+}
