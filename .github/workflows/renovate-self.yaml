@@ -26,10 +26,9 @@ on:
       - node.json5
       - .github/workflows/renovate-self.yaml
 
-concurrency:
-  group: renovate
-  cancel-in-progress: false
-
+# No top-level concurrency here on purpose: renovate.yaml already declares the `renovate` group, and
+# declaring the same group in the caller makes Actions cancel the run with
+# "a deadlock was detected for concurrency group: 'renovate'".
 jobs:
   renovate:
     # The local path form, not yama6a/gha@v1: a self-reference by tag would run whatever v1 pointed at
