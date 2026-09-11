@@ -13,6 +13,15 @@
       "allowedVersions": "<6.0.0"
     },
     {
+      // eslint-plugin-react 7.37.5 is the newest release and peers eslint only up to ^9.7. Under
+      // eslint 10 it throws `contextOrFilename.getFilename is not a function` and lint dies outright.
+      // eslint-config-next depends on it, so every Next repo here is affected. Lift this once
+      // eslint-plugin-react ships eslint 10 support.
+      "description": "hold eslint on 9.x until eslint-plugin-react supports 10",
+      "matchPackageNames": ["eslint"],
+      "allowedVersions": "<10.0.0"
+    },
+    {
       // @vitejs/plugin-react peers an exact vite major.
       "description": "bump vite and its plugins in one PR",
       "matchUpdateTypes": ["major"], // non-majors already ship together in the combined PR
