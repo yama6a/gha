@@ -26,14 +26,9 @@ on:
       - node.json5
       - .github/workflows/renovate-self.yaml
 
-concurrency:
-  group: renovate
-  cancel-in-progress: false
-
 jobs:
   renovate:
-    # The local path form, not yama6a/gha@v1: a self-reference by tag would run whatever v1 pointed at
-    # rather than what is on this branch.
+    # Local path, not @v1: a self-reference by tag would run whatever v1 points at, not this branch.
     uses: ./.github/workflows/renovate.yaml
     permissions:
       contents: read  # Renovate acts through RENOVATE_TOKEN, not GITHUB_TOKEN

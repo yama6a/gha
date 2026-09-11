@@ -32,10 +32,6 @@ on:
     branches: [main]
     paths: [renovate.json5, .github/workflows/renovate.yaml]
 
-concurrency:
-  group: renovate
-  cancel-in-progress: false
-
 jobs:
   renovate:
     uses: yama6a/gha/.github/workflows/renovate.yaml@v1
