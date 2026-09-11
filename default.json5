@@ -16,7 +16,7 @@
 
   // Automerge through Renovate's own API call, not GitHub's native auto-merge. Renovate waits for the
   // branch status either way, which is the only gate in repos without required checks. The merge
-  // therefore lands on a LATER run once CI is green, which is why the workflow cron runs every 3h.
+  // therefore lands on a LATER run once CI is green, which is why the workflow cron runs twice a night, 30 min apart.
   "platformAutomerge": false,
 
   "packageRules": [

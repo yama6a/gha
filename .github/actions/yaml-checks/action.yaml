@@ -19,6 +19,6 @@ runs:
     - name: actionlint  # lints workflow files, and shellchecks their run: blocks
       shell: bash
       run: |
-        curl -fsSL https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_amd64.tar.gz \
+        curl -fsSL "https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_$(dpkg --print-architecture).tar.gz" \
           | tar xz actionlint
         ./actionlint -color

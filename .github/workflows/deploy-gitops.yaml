@@ -25,7 +25,7 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04-arm
     timeout-minutes: 10  # it does not wait for the target's CI, so this is just a hang guard
     permissions: {}  # nothing from the caller repo is needed; DEPLOY_TOKEN carries the rights
     env:
