@@ -155,7 +155,8 @@ jobs:
       - name: Create GitHub release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
           VERSION: ${{ needs.version.outputs.version }}
         run: |
-          gh release create "$VERSION" --target "${{ github.sha }}" --title "$VERSION" \
+          gh release create "$VERSION" --repo "$REPO" --target "${{ github.sha }}" --title "$VERSION" \
             --notes "Image: ${IMAGE}:${VERSION}"
