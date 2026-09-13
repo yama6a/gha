@@ -1,20 +1,20 @@
 name: YAML and workflow lint
 description: Runs yamllint against the repo and actionlint against its workflow files.
-inputs:
-  yamllint-config:
-    description: Path to the yamllint config
-    required: false
-    default: .yamllint.yml
-  path:
-    description: Path to lint with yamllint
-    required: false
-    default: .
 runs:
   using: composite
   steps:
     - name: yamllint
       shell: bash
-      run: pipx run yamllint -c ${{ inputs.yamllint-config }} ${{ inputs.path }}
+      # A repo keeps a local .yamllint.yml only to extend `ignore:`; everything else uses the canonical
+      # config shipped here, so a rule change lands everywhere at once.
+      env:
+        FALLBACK_CONFIG: ${{ github.action_path }}/../../../.yamllint.yml
+      run: |
+        set -euo pipefail
+        config=.yamllint.yml
+        if [ ! -f "$config" ]; then config="$FALLBACK_CONFIG"; fi
+        echo "yamllint config: $config"
+        pipx run yamllint -c "$config" .
 
     - name: actionlint  # lints workflow files, and shellchecks their run: blocks
       shell: bash

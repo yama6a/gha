@@ -1,7 +1,21 @@
-extends: default
+# Relaxed on purpose: this org's YAML is k8s and Helm manifests, ArgoCD Applications and workflow files, not
+# prose, so only real syntax and structure errors fail CI.
+extends: relaxed
 
 rules:
-  line-length: disable
-  document-start: disable
-  truthy:
-    allowed-values: ["true", "false", "on"]  # "on:" is the workflow trigger key
+  line-length: disable          # renovate annotations, URLs and action digest pins
+  truthy: disable               # k8s on/off/yes styling, and the Actions `on:` trigger key
+  colons: disable               # values.yaml is column-aligned (key:   value) on purpose
+  empty-lines: disable
+  comments:
+    min-spaces-from-content: 1  # the default wants two spaces before a trailing `#`; this org writes one
+
+# `#` is NOT a comment inside this block scalar.
+#   **/templates/    Helm templates are Go-templated, not valid YAML
+#   charts/*/charts/ helm dependency build output
+ignore: |
+  .cache/
+  secrets/
+  node_modules/
+  **/templates/
+  charts/*/charts/
