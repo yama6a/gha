@@ -8,7 +8,7 @@ on:
         type: string
         required: true
       values-path:
-        description: Path to the values.yaml in the target repo that pins the image tag
+        description: Path(s) to the values.yaml in the target repo that pin the image tag, one per line
         type: string
         required: true
       target-repo:
@@ -55,14 +55,17 @@ jobs:
           # Anchored on the surrounding quotes and matched on the image name rather than a values key,
           # so renaming a key cannot silently break this and one deployed app cannot match another.
           esc="${IMAGE//./\\.}"
-          sed -i -E "s|\"${esc}:[^\"]*\"|\"${IMAGE}:${TAG}\"|g" "$VALUES"
+          while IFS= read -r values_file; do
+            [ -n "$values_file" ] || continue
+            sed -i -E "s|\"${esc}:[^\"]*\"|\"${IMAGE}:${TAG}\"|g" "$values_file"
 
-          # Without this, a chart move would report a successful deploy while the cluster kept the old
-          # image, which looks identical to a healthy deploy from the outside.
-          if git diff --quiet -- "$VALUES"; then
-            echo "::error::nothing in $VALUES pointed at ${IMAGE} (already ${TAG}, or the chart moved)"
-            exit 1
-          fi
+            # Without this, a chart move would report a successful deploy while the cluster kept the old
+            # image, which looks identical to a healthy deploy from the outside.
+            if git diff --quiet -- "$values_file"; then
+              echo "::error::nothing in $values_file pointed at ${IMAGE} (already ${TAG}, or the chart moved)"
+              exit 1
+            fi
+          done <<< "$VALUES"
 
           git commit -qam "Deploy ${name}:${TAG}"
           git push -q --force origin "$branch"  # force so re-running a failed deploy is idempotent

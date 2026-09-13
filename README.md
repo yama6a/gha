@@ -64,6 +64,9 @@ jobs:
     with:
       tag: ${{ needs.build-push.outputs.version }}
       values-path: argo_apps/workloads/charts/myapp/values.yaml
+      # values-path: |                        # one image pinned by several charts: one PR bumps them all
+      #   argo_apps/workloads/charts/myapp-a/values.yaml
+      #   argo_apps/workloads/charts/myapp-b/values.yaml
       # target-repo: yama6a/offgrid-private   # default
     secrets:
       DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
