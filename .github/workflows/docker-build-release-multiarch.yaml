@@ -131,6 +131,9 @@ jobs:
         env:
           TRIVY_USERNAME: ${{ github.actor }}  # trivy pulls the image itself, and a private repo's needs a login
           TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+          # The per-arch push is an index (image + attestation), and trivy picks linux/amd64 out of
+          # an index unless told otherwise, so the arm64 leg fails with "no child with platform".
+          TRIVY_PLATFORM: ${{ matrix.platform }}
         with:
           image-ref: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
           format: table
