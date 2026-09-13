@@ -143,25 +143,125 @@ jobs:
 
 ### `node-ci.yaml`
 
-Lint, typecheck, test, audit, build - on by default, so a new repo never quietly ships
-without them. Disable the ones that don't apply.
+Generate drift, lint, format, typecheck, test, audit, build. Job id `check`, job name `node` -
+`node` is the required-check context to pin branch protection to.
 
 ```yaml
 jobs:
-  ci:
-    uses: yama6a/gha/.github/workflows/node-ci.yaml@v1
-    with:
-      package-manager: pnpm   # default: npm
-      # typecheck: false      # e.g. a plain-JS repo with no tsconfig
-      # test: false           # e.g. a repo with no test script yet
-      # build-env: |
-      #   NEXT_PUBLIC_USE_MOCK_DATA=true
-      # working-directory: web            # frontend not at the repo root
-      # pre-check: make generate          # monorepo codegen a check depends on
+  node:
+    uses: yama6a/gha/.github/workflows/node-ci.yaml@v2
+    # with:
+    #   working-directory: web           # frontend not at the repo root
+    #   runner: ubuntu-24.04             # default: ubuntu-24.04-arm
+    #   build-env: |
+    #     NEXT_PUBLIC_USE_MOCK_DATA=true
 ```
 
-Assumes the standard script names: `lint`, `typecheck`, `test`, `build`. A repo whose scripts
-are named differently renames the script rather than adding an override here.
+| input | default | meaning |
+|---|---|---|
+| `working-directory` | `.` | where `package.json`, `package-lock.json` and `.nvmrc` live |
+| `build-env` | `''` | newline `KEY=VALUE` pairs, exported before the build step only |
+| `runner` | `ubuntu-24.04-arm` | |
+
+No toggles. Every project defines all six scripts; one that has nothing to do for a step defines
+it as `"exit 0"`, so the gap sits in `package.json` where a reader sees it.
+
+| script | what CI does with it |
+|---|---|
+| `generate` | runs it, then `git diff --exit-code` from the repo root; a dirty tree fails the job |
+| `lint` | eslint, with any repo-specific checks chained in (see below) |
+| `format:check` | `prettier --check .` |
+| `typecheck` | `tsc --noEmit` |
+| `test` | unit tests |
+| `build` | production build, after `build-env` is exported |
+
+`.nvmrc` is required (`24`), in `working-directory`. It is the only place the Node version is
+written: `setup-node` reads it, the Dockerfile reads it, and the `engines` field is left to
+Renovate's ignore rule in `node.json5`.
+
+Repo-specific checks chain into `lint` rather than becoming their own job:
+
+```json
+"lint": "eslint && npm run lint:raw-colors && npm run lint:translations",
+"lint:raw-colors": "! grep -rn --include='*.tsx' -E '#[0-9a-fA-F]{3,8}' src/components/ui/",
+```
+
+Every project copies this `.prettierrc.json`:
+
+```json
+{
+  "printWidth": 100,
+  "singleQuote": true,
+  "overrides": [
+    { "files": ["*.html", "*.css", "*.json", "*.json5", "*.yaml", "*.yml"], "options": { "singleQuote": false } }
+  ]
+}
+```
+
+`.prettierignore` must list `package-lock.json` and every generated output dir. Prettier
+reformats generated files otherwise, and the `generate` drift check then fails on every run.
+
+### `playwright-e2e.yaml`
+
+Builds once, uploads the build, runs the suite sharded across parallel runners. Job id `gate`,
+job name `e2e` - that is the required check; the per-shard jobs are not, so `shard-total` can
+change without stranding a context.
+
+```yaml
+jobs:
+  e2e:
+    uses: yama6a/gha/.github/workflows/playwright-e2e.yaml@v2
+    with:
+      build-env: |
+        NEXT_PUBLIC_USE_MOCK_DATA=true
+    # shard-total: 4
+    # browser: chromium
+    # working-directory: web
+    # build-artifact-paths: |            # default is the three .next lines
+    #   dist
+```
+
+| input | default | meaning |
+|---|---|---|
+| `shard-total` | `4` | parallel shards |
+| `runner` | `ubuntu-24.04-arm` | must match the warm-cache caller, the cache key includes `runner.arch` |
+| `working-directory` | `.` | where `package.json` lives |
+| `build-env` | `''` | newline `KEY=VALUE` pairs, exported before the build step only |
+| `build-artifact-paths` | `.next`, `!.next/cache`, `!.next/standalone` | `upload-artifact` paths, relative to the repo root; the first non-`!` line is where the shards download it back to |
+| `browser` | `chromium` | |
+| `warm-cache` | `false` | run only the cache-warming job |
+
+`playwright.config.ts` starts the built app itself (`webServer`), so the shards serve the
+downloaded artifact instead of rebuilding. Set `workers: 2` in CI: a worker drives a whole
+Chromium and they all share one server.
+
+A cache written on a PR is restorable only by that same PR, so PRs never share one. A cache
+written on the default branch is restorable by all of them, which is what the second caller is
+for:
+
+```yaml
+# .github/workflows/warm-cache.yaml
+name: warm-cache
+
+on:
+  push:
+    branches: [master]
+    paths: ['package-lock.json']
+
+concurrency:
+  group: warm-cache
+  cancel-in-progress: true
+
+jobs:
+  warm:
+    uses: yama6a/gha/.github/workflows/playwright-e2e.yaml@v2
+    with:
+      warm-cache: true
+      runner: ubuntu-24.04-arm   # same runner as the e2e caller
+```
+
+Only on a lockfile change: both caches are keyed off it (the Playwright version lives there
+too), so a merge that leaves it alone leaves the existing caches valid.
 
 ## Renovate presets
 
