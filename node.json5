@@ -1,25 +1,35 @@
 {
   // npm repos. Extend it with "github>yama6a/gha:node.json5", alongside the default preset.
   // Only peer-coupled majors and version holds live here: a lone bump of either half fails `npm ci`
-  // with ERESOLVE, so they have to travel in one PR.
+  // with ERESOLVE, so they have to travel in one PR. A hold that applies to one repo only belongs
+  // in that repo's own config, not here.
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "packageRules": [
     {
-      // typescript-eslint 8 peers `typescript >=4.8.4 <6.1.0`, and TS 7 makes its parser throw
-      // outright, so a TS 7 bump takes `npm run lint` down. Lift this once typescript-eslint ships
-      // TS 7 support.
-      "description": "hold typescript on 5.x until typescript-eslint supports 7",
+      // typescript-eslint 8 declares `typescript >=4.8.4 <6.1.0`. TS 6 is outside the range but
+      // only warns; TS 7 makes the parser throw and takes `npm run lint` down with it. Lift this
+      // once typescript-eslint ships TS 7 support.
+      "description": "typescript-eslint peers <6.1",
       "matchPackageNames": ["typescript"],
-      "allowedVersions": "<6.0.0"
+      "allowedVersions": "<7.0.0"
     },
     {
-      // eslint-plugin-react 7.37.5 is the newest release and peers eslint only up to ^9.7. Under
-      // eslint 10 it throws `contextOrFilename.getFilename is not a function` and lint dies outright.
-      // eslint-config-next depends on it, so every Next repo here is affected. Lift this once
-      // eslint-plugin-react ships eslint 10 support.
-      "description": "hold eslint on 9.x until eslint-plugin-react supports 10",
-      "matchPackageNames": ["eslint"],
-      "allowedVersions": "<10.0.0"
+      "description": ".nvmrc is the single source of the Node version",
+      "matchDepTypes": ["engines"],
+      "enabled": false
+    },
+    {
+      // The runtime that builds the app and the runtime that runs the image have to be the same
+      // major, so a PR that moves only one of them is a bug waiting to happen.
+      "description": "bump the CI node and the image node in one PR",
+      "matchManagers": ["nvm", "dockerfile"],
+      "matchUpdateTypes": ["major"],
+      "matchPackageNames": [
+        "node",
+        "/^(docker\\.io/)?(library/)?node$/",
+        "gcr.io/distroless/nodejs24-debian12"
+      ],
+      "groupName": "node"
     },
     {
       // @vitejs/plugin-react peers an exact vite major.
