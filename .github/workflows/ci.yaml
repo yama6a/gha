@@ -27,3 +27,34 @@ jobs:
       - uses: ./.github/actions/validate-renovate-config
         with:
           config-file: default.json5 go.json5 node.json5
+
+  # The only composite action here whose shell branches. Three repos adopt it on the same v1
+  # move, so a wrong arg build would break all three at once.
+  kubeconform:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - uses: ./.github/actions/kubeconform
+        with:
+          paths: .github/testdata/kubeconform/valid.yaml
+
+      - name: -strict survived the arg building
+        run: |
+          set -uo pipefail
+          # shellcheck disable=SC2086
+          if kubeconform $KUBECONFORM_ARGS .github/testdata/kubeconform/invalid.yaml; then
+            echo "::error::kubeconform accepted a manifest that -strict must reject"
+            exit 1
+          fi
+
+      # No paths: installs and exports the flags, runs nothing, which is the stdin call shape.
+      - uses: ./.github/actions/kubeconform
+        with:
+          crd-catalog: 'false'
+
+      - name: install-only exports usable args
+        run: |
+          set -euo pipefail
+          # shellcheck disable=SC2086
+          kubeconform $KUBECONFORM_ARGS < .github/testdata/kubeconform/valid.yaml

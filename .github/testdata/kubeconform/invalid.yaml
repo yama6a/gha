@@ -1,0 +1,19 @@
+# `replicaz` is only rejected under -strict, so this file is what proves the flag survived
+# the arg building in the action.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: smoke
+spec:
+  replicaz: 1
+  selector:
+    matchLabels:
+      app: smoke
+  template:
+    metadata:
+      labels:
+        app: smoke
+    spec:
+      containers:
+        - name: smoke
+          image: busybox:1.37.0

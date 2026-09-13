@@ -123,16 +123,22 @@ jobs:
 
 ### `go-ci.yaml`
 
-golangci-lint, go vet, go test, govulncheck.
+golangci-lint, go vet, go test, govulncheck. The job is named `go`, so that is the
+required-check context a caller pins branch protection to.
 
 ```yaml
 jobs:
-  ci:
+  go:
     uses: yama6a/gha/.github/workflows/go-ci.yaml@v1
     with:
       tidy-check: true
       race: true
       coverage: true
+      # fmt-check: true          # golangci-lint fmt --diff; `run` does not enforce formatters
+      # test-args: -count=1      # go test otherwise serves cached results from the restored GOCACHE
+      # cross-compile: |         # for a repo whose release is a manifest list
+      #   linux/amd64
+      #   linux/arm64
 ```
 
 ### `node-ci.yaml`
@@ -206,6 +212,26 @@ yamllint + actionlint.
 - uses: yama6a/gha/.github/actions/yaml-checks@v1
   # with:
   #   yamllint-config: .yamllint.yml
+```
+
+### `actions/kubeconform`
+
+Installs a pinned kubeconform and, with `paths`, validates them. Without `paths` it only
+installs, and exports the resolved flags as `KUBECONFORM_ARGS` for a caller that pipes
+rendered YAML in on stdin.
+
+```yaml
+- uses: yama6a/gha/.github/actions/kubeconform@v1
+  with:
+    paths: lib/k8s/*.yaml
+    # crd-catalog: false   # core types only, skip the datreeio schema location
+    # parallelism: 8
+
+# or, install only:
+- uses: yama6a/gha/.github/actions/kubeconform@v1
+- run: |
+    # shellcheck disable=SC2086
+    helm template ./chart | kubeconform $KUBECONFORM_ARGS
 ```
 
 ### `actions/shellcheck`
