@@ -1,0 +1,5 @@
+apiVersion: v2
+name: smoke
+description: Fixture chart for the helm-chart-checks action. One Deployment, nothing else.
+type: application
+version: 0.1.0

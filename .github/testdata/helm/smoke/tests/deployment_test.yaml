@@ -1,0 +1,9 @@
+suite: deployment
+templates:
+  - deployment.yaml
+tests:
+  - it: pins the image tag from values
+    asserts:
+      - equal:
+          path: spec.template.spec.containers[0].image
+          value: registry.k8s.io/pause:3.10
