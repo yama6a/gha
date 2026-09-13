@@ -41,8 +41,11 @@ runs:
       run: |
         set -euo pipefail
         verify=()
-        # helm 4 refuses an unsigned plugin source unless verification is waived; helm 3 has no such flag
-        if helm plugin install --help | grep -q -- '--verify'; then verify=(--verify=false); fi
+        # helm 4 refuses an unsigned plugin source unless verification is waived; helm 3 has no such flag.
+        # Captured rather than piped into grep -q: under pipefail, grep exiting early can SIGPIPE helm
+        # and turn a match into a non-zero pipeline.
+        help_text="$(helm plugin install --help 2>&1 || true)"
+        case "$help_text" in *--verify*) verify=(--verify=false) ;; esac
         # a second call of this action in the same job would otherwise die on "plugin already exists"
         install() { helm plugin list | grep -q "^$1[[:space:]]" || helm plugin install "$2" --version "$3" "${verify[@]}"; }
         install unittest https://github.com/helm-unittest/helm-unittest v1.1.2
