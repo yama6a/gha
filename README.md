@@ -175,9 +175,9 @@ it as `"exit 0"`, so the gap sits in `package.json` where a reader sees it.
 | `test` | unit tests |
 | `build` | production build, after `build-env` is exported |
 
-`.nvmrc` is required (`24`), in `working-directory`. It is the only place the Node version is
-written: `setup-node` reads it, the Dockerfile reads it, and the `engines` field is left to
-Renovate's ignore rule in `node.json5`.
+`.nvmrc` is required (`24`), in `working-directory`, and is the only place the Node version is
+written. No `engines` field: two places to bump is one place to get them out of step, so
+`node.json5` tells Renovate to ignore that dep type.
 
 Repo-specific checks chain into `lint` rather than becoming their own job:
 
