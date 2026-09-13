@@ -81,7 +81,8 @@ Requires a `DEPLOY_TOKEN` secret with write access to the target repo.
 
 hadolint, next integer release version, an optional build command (for a static site or SPA the
 Dockerfile only `COPY`s), a multi-arch image pushed to GHCR, a trivy scan, a signed provenance
-attestation, a GitHub release. Outputs `version` for a following `deploy-gitops.yaml` call.
+attestation (public repos only; a Pro plan has none for private repos), a GitHub release. Outputs
+`version` for a following `deploy-gitops.yaml` call.
 
 ```yaml
 permissions:

@@ -42,13 +42,13 @@ jobs:
             exit 1
           fi
 
-      # job_workflow_sha is the SHA of this reusable workflow's own commit, so a
-      # caller pinned to @v2 gets the v2 config and never main's.
+      # job.workflow_sha is this reusable workflow's own commit, so a caller pinned
+      # to @v2 gets the v2 config and never main's.
       - name: Fetch the canonical lint config
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
-          repository: yama6a/gha
-          ref: ${{ github.job_workflow_sha }}
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
           path: .gha
           sparse-checkout: .golangci.yaml
           sparse-checkout-cone-mode: false  # cone mode selects directories, not one file
