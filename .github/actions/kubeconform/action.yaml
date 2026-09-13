@@ -1,0 +1,67 @@
+name: Kubeconform
+description: Installs a pinned kubeconform and, when given paths, validates them against it.
+inputs:
+  version:
+    description: kubeconform release tag
+    required: false
+    default: v0.6.7
+  paths:
+    description: >-
+      Files or globs to validate. Empty installs the binary and exports KUBECONFORM_ARGS
+      without running it, for a caller that pipes rendered YAML in on stdin.
+    required: false
+    default: ''
+  strict:
+    description: Reject unknown fields and duplicate keys
+    required: false
+    default: 'true'
+  ignore-missing-schemas:
+    description: Skip a resource whose schema cannot be found instead of failing on it
+    required: false
+    default: 'true'
+  crd-catalog:
+    description: Add the datreeio CRDs-catalog as a second schema location, for non-core types
+    required: false
+    default: 'true'
+  parallelism:
+    description: Value for kubeconform -n; empty leaves its default
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    - name: install kubeconform
+      shell: bash
+      run: |
+        set -euo pipefail
+        curl -fsSL "https://github.com/yannh/kubeconform/releases/download/${{ inputs.version }}/kubeconform-linux-$(dpkg --print-architecture).tar.gz" \
+          | tar xz kubeconform
+        sudo mv kubeconform /usr/local/bin/
+        kubeconform -v
+
+    - name: resolve kubeconform args
+      shell: bash
+      env:
+        STRICT: ${{ inputs.strict }}
+        IGNORE_MISSING: ${{ inputs.ignore-missing-schemas }}
+        CRD_CATALOG: ${{ inputs.crd-catalog }}
+        PARALLELISM: ${{ inputs.parallelism }}
+      run: |
+        set -euo pipefail
+        args=(-summary -schema-location default)
+        if [ "$STRICT" = "true" ]; then args+=(-strict); fi
+        if [ "$IGNORE_MISSING" = "true" ]; then args+=(-ignore-missing-schemas); fi
+        if [ "$CRD_CATALOG" = "true" ]; then
+          args+=(-schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json')
+        fi
+        if [ -n "$PARALLELISM" ]; then args+=(-n "$PARALLELISM"); fi
+        echo "KUBECONFORM_ARGS=${args[*]}" >> "$GITHUB_ENV"
+
+    - name: kubeconform
+      if: inputs.paths != ''
+      shell: bash
+      run: |
+        set -euo pipefail
+        # KUBECONFORM_ARGS and the paths glob are both meant to split into words here
+        # shellcheck disable=SC2086
+        kubeconform $KUBECONFORM_ARGS ${{ inputs.paths }}

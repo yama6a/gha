@@ -13,6 +13,10 @@ on:
         description: Fail if go mod tidy would change go.mod/go.sum
         type: boolean
         default: false
+      fmt-check:
+        description: Fail if the formatters golangci-lint is configured with would rewrite anything
+        type: boolean
+        default: false
       race:
         description: Run go test with -race
         type: boolean
@@ -21,10 +25,20 @@ on:
         description: Run go test with a coverage profile and print the summary
         type: boolean
         default: false
+      test-args:
+        description: Extra flags appended to go test, e.g. -count=1 to defeat the result cache
+        type: string
+        default: ''
+      cross-compile:
+        description: >-
+          Newline-separated GOOS/GOARCH targets to build after the tests, e.g. linux/amd64.
+          Empty builds nothing beyond what the tests already compile.
+        type: string
+        default: ''
 
 jobs:
   check:
-    name: golangci-lint - go vet - go test - govulncheck
+    name: go  # a required-check context; the steps grow, this does not
     runs-on: ubuntu-24.04-arm
     steps:
       - name: Checkout
@@ -57,12 +71,33 @@ jobs:
         with:
           args: ${{ inputs.golangci-args }}
 
+      # `run` does not enforce the formatters, so check them separately. golangci-lint-action
+      # puts the binary on PATH, so this reuses that install rather than fetching its own.
+      - name: Check formatting
+        if: inputs.fmt-check
+        run: golangci-lint fmt --diff
+
       - name: Run go vet
         run: go vet ./...
 
       - name: Run go test
-        run: go test ./... -v ${{ inputs.race && '-race' || '' }} ${{ inputs.coverage && '-coverprofile=cover.out' || '' }}
+        run: go test ./... -v ${{ inputs.race && '-race' || '' }} ${{ inputs.coverage && '-coverprofile=cover.out' || '' }} ${{ inputs.test-args }}
 
       - name: Coverage summary
         if: inputs.coverage
         run: go tool cover -func=cover.out | tail -1
+
+      # A repo that ships a manifest list runs CI on one arch only, so a compile error on the
+      # other would first surface at release time.
+      - name: Cross-compile
+        if: inputs.cross-compile != ''
+        env:
+          TARGETS: ${{ inputs.cross-compile }}
+        run: |
+          set -euo pipefail
+          while read -r target; do
+            [ -n "$target" ] || continue
+            echo "::group::build $target"
+            CGO_ENABLED=0 GOOS="${target%%/*}" GOARCH="${target##*/}" go build ./...
+            echo "::endgroup::"
+          done <<< "$TARGETS"
