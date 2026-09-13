@@ -146,6 +146,9 @@ jobs:
           vuln-type: os,library
           severity: CRITICAL,HIGH
 
+      # The ci-* tag is left in place on purpose: the release tag is a byte-identical copy with
+      # the same digest, and GHCR deletes by digest, so removing the ci-* package version
+      # would take the release tag with it.
       - name: Promote the scanned image to the release tag
         env:
           VERSION: ${{ steps.version.outputs.version }}
@@ -180,18 +183,3 @@ jobs:
             --target "${{ github.sha }}" \
             --title "$VERSION" \
             --notes "Image: ${IMAGE}:${VERSION}"
-
-      # A leftover ci-* tag is cosmetic, and GITHUB_TOKEN cannot always read the package API.
-      - name: Delete the temporary tag
-        continue-on-error: true
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          OWNER: ${{ github.repository_owner }}
-          REPO: ${{ github.repository }}
-        run: |
-          ids=$(gh api "/users/${OWNER}/packages/container/${REPO#*/}/versions" --paginate \
-            --jq '.[] | select(.metadata.container.tags[]? == env.CI_TAG) | .id')
-          id=${ids%%$'\n'*}
-          if [ -n "$id" ]; then
-            gh api -X DELETE "/users/${OWNER}/packages/container/${REPO#*/}/versions/${id}"
-          fi
