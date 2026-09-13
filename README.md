@@ -6,6 +6,9 @@ to a tagged release (`@v1`), not `@main`.
 This repo also hosts the shared Renovate presets, which are referenced by content rather than
 by tag. See [Renovate presets](#renovate-presets).
 
+How the repos themselves are set up - merges, branch protection, required-check names, per-stack
+rules - is in [ORG_CONVENTIONS.md](ORG_CONVENTIONS.md).
+
 ## Reusable workflows
 
 ### `renovate.yaml`
@@ -346,3 +349,28 @@ rendered YAML in on stdin.
 Repo-specific extras (helm/kubeconform validation, hadolint, per-app npm test suites) stay
 local to each repo - only the pieces that were byte-for-byte duplicated across 3+ repos live
 here.
+
+## Scripts
+
+### `scripts/repo-settings.sh`
+
+Applies the merge, security and branch-protection settings from
+[ORG_CONVENTIONS.md](ORG_CONVENTIONS.md) to every repo, driven by one table at the top of the
+script. Needs `jq` and a `gh` logged in as a repo admin.
+
+```bash
+scripts/repo-settings.sh --dry-run   # print every gh api call, change nothing
+scripts/repo-settings.sh             # apply; re-running changes nothing
+scripts/repo-settings.sh --verify    # intended vs actual per repo, exit 1 on any mismatch
+```
+
+One line per repo, pipe-separated. Contexts are comma-separated and carry spaces and slashes, which
+is why the fields are not:
+
+```
+repo | default branch | merge commits | visibility | required contexts
+gha  | main           | false         | public     | yaml,renovate-presets
+```
+
+Edit the table, dry-run it, then apply. `--dry-run` also prints the id of any ruleset named `main`
+it would delete.
