@@ -214,11 +214,11 @@ jobs:
     with:
       build-env: |
         NEXT_PUBLIC_USE_MOCK_DATA=true
-    # shard-total: 4
-    # browser: chromium
-    # working-directory: web
-    # build-artifact-paths: |            # default is the three .next lines
-    #   dist
+      # shard-total: 4
+      # browser: chromium
+      # working-directory: web
+      # build-artifact-paths: |          # default is the three .next lines
+      #   dist
 ```
 
 | input | default | meaning |
@@ -245,7 +245,7 @@ name: warm-cache
 
 on:
   push:
-    branches: [master]
+    branches: [master]   # the default branch, wherever the restorable caches have to be written
     paths: ['package-lock.json']
 
 concurrency:
