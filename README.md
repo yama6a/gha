@@ -1,40 +1,168 @@
 # gha
 
-Shared GitHub Actions workflows and composite actions for yama6a repos. Pin every reference
-to a tagged release (`@v2`), not `@main`.
-
-This repo also hosts the shared Renovate presets, which are referenced by content rather than
-by tag. See [Renovate presets](#renovate-presets).
-
-How the repos themselves are set up - merges, branch protection, required-check names, per-stack
-rules - is in [ORG_CONVENTIONS.md](ORG_CONVENTIONS.md).
+Shared GitHub Actions workflows, composite actions and Renovate presets for yama6a repos.
+Pin every `uses:` to `@v2`. How the repos themselves are set up is in
+[ORG_CONVENTIONS.md](ORG_CONVENTIONS.md).
 
 ## Reusable workflows
 
-### `renovate.yaml`
+Required-check names follow one rule: the caller's job id is the workflow's short name, the
+workflow's job carries the same `name:`, so the context is `go / go`, `node / node`, `e2e / e2e`.
 
-Self-hosted Renovate runner with cross-run caching. The caller repo still needs its own thin
-workflow file to own the triggers (`schedule`, `workflow_dispatch`, `push`).
+### `go-ci.yaml`
+
+No inputs. Tidy drift, generate drift, golangci-lint with the canonical `.golangci.yaml` from this
+repo, fmt, vet, `go test -race -count=1` with coverage, govulncheck, cross-compile amd64 and arm64.
 
 ```yaml
-# .github/workflows/renovate.yaml
-name: Renovate
+jobs:
+  go:
+    uses: yama6a/gha/.github/workflows/go-ci.yaml@v2
+```
+
+The caller must not carry a `.golangci.yaml`; the workflow fails if it finds one. Repo-specific
+additions go in `.golangci.local.yaml`, merged on top with
+`yq eval-all '. as $item ireduce ({}; . *+ $item)'` (`*+` appends to lists, so the local file
+holds only its additions). `templates/Makefile.go` runs the same merge locally so `make lint` and
+CI agree.
+
+### `node-ci.yaml`
+
+`npm ci`, then the scripts `generate` (followed by `git diff --exit-code`), `lint`,
+`format:check`, `typecheck`, `test`, `npm audit --audit-level=high`, `build`. Node version from
+`.nvmrc`. Every script must exist; `"exit 0"` where a project has nothing to do.
+
+```yaml
+jobs:
+  node:
+    uses: yama6a/gha/.github/workflows/node-ci.yaml@v2
+    # with:
+    #   working-directory: web
+    #   build-env: |
+    #     NEXT_PUBLIC_USE_MOCK_DATA=true
+```
+
+| input | default |
+|---|---|
+| `working-directory` | `.` |
+| `build-env` | none; newline `KEY=VALUE`, exported for the build step only |
+| `runner` | `ubuntu-24.04-arm` |
+
+### `playwright-e2e.yaml`
+
+Builds once, uploads the build, runs the suite sharded. Required check is the gate job, `e2e / e2e`;
+shards are not required, so `shard-total` can change freely.
+
+```yaml
+jobs:
+  e2e:
+    uses: yama6a/gha/.github/workflows/playwright-e2e.yaml@v2
+    with:
+      build-env: |
+        NEXT_PUBLIC_USE_MOCK_DATA=true
+```
+
+| input | default |
+|---|---|
+| `shard-total` | `4` |
+| `runner` | `ubuntu-24.04-arm`; must match the warm-cache caller, the cache key includes the arch |
+| `working-directory` | `.` |
+| `build-env` | none |
+| `build-artifact-paths` | `.next`, `!.next/cache`, `!.next/standalone`; first non-`!` line is the download target |
+| `browser` | `chromium` |
+| `warm-cache` | `false`; run only the cache-priming job |
+
+PR caches are private to their PR, so the caller also warms the default-branch cache:
+
+```yaml
+# .github/workflows/warm-cache.yaml
+on:
+  push:
+    branches: [main]
+    paths: ['package-lock.json']
+concurrency:
+  group: warm-cache
+  cancel-in-progress: true
+jobs:
+  warm:
+    uses: yama6a/gha/.github/workflows/playwright-e2e.yaml@v2
+    with:
+      warm-cache: true
+```
+
+### `docker-build-release.yaml`
+
+hadolint, next integer version, optional `build-command`, multi-arch image to GHCR with provenance
+and SBOM, trivy scan (report-only), signed attestation (public repos only), GitHub release.
+Outputs `version`.
+
+```yaml
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+  attestations: write
+
+jobs:
+  build-push:
+    uses: yama6a/gha/.github/workflows/docker-build-release.yaml@v2
+    with:
+      dockerfile: .build/Dockerfile
+
+  deploy:
+    needs: build-push
+    permissions: {}
+    uses: yama6a/gha/.github/workflows/deploy-gitops.yaml@v2
+    with:
+      tag: ${{ needs.build-push.outputs.version }}
+      values-path: argo_apps/workloads/charts/myapp/values.yaml
+    secrets:
+      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
+```
+
+All four permissions are required; a reusable job gets only what the caller grants.
+
+| input | default |
+|---|---|
+| `dockerfile` | `Dockerfile` |
+| `context` | `.` |
+| `platforms` | `linux/amd64,linux/arm64` |
+| `build-command` | none; runs on the runner before the build, Node from `.nvmrc`, npm |
+| `build-args` | none; newline `KEY=VALUE` |
+| `version` | none; use this string instead of the integer counter |
+| `create-release` | `true`; `false` when the caller publishes more artifacts and tags itself |
+
+### `docker-build-release-multiarch.yaml`
+
+Same result, one native runner per architecture, for a build that cannot run under QEMU. Same
+caller permissions. Inputs: `dockerfile`, `context`, `build-args`, `version`, and `platforms` as a
+JSON array of `{platform, runner}` (default amd64 on `ubuntu-latest`, arm64 on `ubuntu-24.04-arm`).
+
+### `deploy-gitops.yaml`
+
+Bumps an image tag in a GitOps repo's `values.yaml`, opens a PR, arms auto-merge. Caller example
+above. Needs a `DEPLOY_TOKEN` secret with write access to the target repo.
+
+| input | default |
+|---|---|
+| `tag` | required |
+| `values-path` | required; one path per line bumps several charts in one PR |
+| `target-repo` | `yama6a/offgrid-private` |
+| `target-branch` | `main` |
+
+### `renovate.yaml`
+
+Self-hosted Renovate with a cross-run cache. The caller owns the triggers.
+
+```yaml
 on:
   schedule:
     - cron: "13 5 * * *"  # opens PRs
     - cron: "43 5 * * *"  # merges the ones whose CI went green
   workflow_dispatch:
     inputs:
-      logLevel:
-        default: info
-        type: choice
-        options: [info, debug]
-      dryRun:
-        default: false
-        type: boolean
-  push:
-    branches: [main]
-    paths: [renovate.json5, .github/workflows/renovate.yaml]
+      logLevel: { default: info, type: choice, options: [info, debug] }
+      dryRun: { default: false, type: boolean }
 
 jobs:
   renovate:
@@ -47,572 +175,125 @@ jobs:
       RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
 ```
 
-Requires a `RENOVATE_TOKEN` secret (a PAT, not `GITHUB_TOKEN`, since it needs to open PRs that
-re-trigger workflows).
-
-### `deploy-gitops.yaml`
-
-Bumps an image tag in a GitOps repo's `values.yaml`, opens a PR, arms automerge. Call it as a
-job that needs the build job's output tag.
-
-```yaml
-jobs:
-  build-push:
-    uses: yama6a/gha/.github/workflows/docker-build-release.yaml@v2
-    # ...
-
-  deploy:
-    needs: build-push
-    uses: yama6a/gha/.github/workflows/deploy-gitops.yaml@v2
-    with:
-      tag: ${{ needs.build-push.outputs.version }}
-      values-path: argo_apps/workloads/charts/myapp/values.yaml
-      # values-path: |                        # one image pinned by several charts: one PR bumps them all
-      #   argo_apps/workloads/charts/myapp-a/values.yaml
-      #   argo_apps/workloads/charts/myapp-b/values.yaml
-      # target-repo: yama6a/offgrid-private   # default
-    secrets:
-      DEPLOY_TOKEN: ${{ secrets.DEPLOY_TOKEN }}
-```
-
-Requires a `DEPLOY_TOKEN` secret with write access to the target repo.
-
-### `docker-build-release.yaml`
-
-hadolint, next integer release version, an optional build command (for a static site or SPA the
-Dockerfile only `COPY`s), a multi-arch image pushed to GHCR, a trivy scan, a signed provenance
-attestation (public repos only; a Pro plan has none for private repos), a GitHub release. Outputs
-`version` for a following `deploy-gitops.yaml` call.
-
-```yaml
-permissions:
-  contents: write      # create the GitHub release
-  packages: write      # push the image
-  id-token: write      # mint the OIDC token the attestation is signed with
-  attestations: write  # store the attestation
-
-jobs:
-  build-push:
-    uses: yama6a/gha/.github/workflows/docker-build-release.yaml@v2
-    with:
-      dockerfile: .build/Dockerfile   # default: Dockerfile
-      # build-command: npm ci && npm run build
-      # build-args: |
-      #   VERSION=${{ needs.tag.outputs.semver }}
-      # version: ${{ needs.tag.outputs.semver }}   # use this string instead of the integer counter
-      # create-release: false   # the caller publishes more artifacts (a chart) and tags itself afterwards
-
-  deploy:
-    needs: build-push
-    permissions: {}   # the block above is workflow-wide; scope it back off for jobs that do not build
-    uses: yama6a/gha/.github/workflows/deploy-gitops.yaml@v2
-```
-
-All four `permissions` lines are required. A reusable workflow's jobs can only request what the
-caller grants, and a missing `attestations: write` surfaces three quarters of the way through
-the run, after the image is already pushed.
-
-`build-command` runs on the runner rather than in the Dockerfile, so it happens once instead of
-once per target arch under emulation. Node comes from the repo's `.nvmrc` and the package
-manager is npm; neither is an input.
-
-Trivy scans a throwaway `ci-<run_id>` tag, which the release tag is then copied from with
-`docker buildx imagetools create` - a two-platform QEMU build cannot `--load` a manifest list,
-so there is nothing local to scan. The copy is byte-identical, so the digest that was scanned is
-the digest that gets attested and released. The scan is report-only today: CRITICAL and HIGH,
-fixed vulnerabilities only, printed as a table, `exit-code: '0'`. Once a repo has had a week of
-output and a `.trivyignore` covering what it decides to carry, flip that one line to `'1'`.
-
-Does not cover a build that cannot run under QEMU (e.g. `next build`, which SIGILLs under
-emulation) - use `docker-build-release-multiarch.yaml` for that.
-
-### `docker-build-release-multiarch.yaml`
-
-Same job as above, but each platform builds on its own native runner and the resulting images
-are joined into one manifest list. Use when the build cannot run under QEMU emulation.
-
-```yaml
-permissions:
-  contents: write      # create the GitHub release
-  packages: write      # push the image
-  id-token: write      # mint the OIDC token the attestation is signed with
-  attestations: write  # store the attestation
-
-jobs:
-  build-push:
-    uses: yama6a/gha/.github/workflows/docker-build-release-multiarch.yaml@v2
-    with:
-      build-args: |
-        NEXT_PUBLIC_API_URL_CLIENT=https://api.example.com
-      # version: ${{ needs.tag.outputs.semver }}
-      # platforms: >-
-      #   [{"platform":"linux/amd64","runner":"ubuntu-latest"},
-      #    {"platform":"linux/arm64","runner":"ubuntu-24.04-arm"}]   # default
-```
-
-hadolint runs once, in the `version` job. Each arch is scanned on its own native runner right
-after its digest is pushed, so nothing is emulated; the provenance is attested once, on the
-finished manifest list. The scan is report-only on the same terms as above, and `merge` needs
-`build`, so enforcing it would block the manifest rather than only the report.
-
-### `go-ci.yaml`
-
-No inputs. Every check below runs on every call.
-
-```yaml
-jobs:
-  go:
-    uses: yama6a/gha/.github/workflows/go-ci.yaml@v2
-```
-
-Job id `go`, job name `go`, so the required-check context to pin branch protection to is
-`go / go`.
-
-| step | command |
-|---|---|
-| tidy check | `go mod tidy`, then `git diff --exit-code -- go.mod go.sum` |
-| generate check | `go generate ./...`, then the whole worktree must be unchanged and free of new files |
-| lint | `golangci-lint run --timeout 5m -c <merged config> ./...` |
-| fmt check | `golangci-lint fmt --diff -c <merged config>` |
-| vet | `go vet ./...` |
-| test | `go test ./... -race -count=1 -coverprofile=cover.out`, then the coverage total |
-| vuln | `go run golang.org/x/vuln/cmd/govulncheck@latest ./...` |
-| cross-compile | `CGO_ENABLED=0 go build ./...` for linux/amd64 and linux/arm64 |
-
-Tidy runs before generate: a generator invoked with `go run -mod=mod` can edit go.mod, and the
-tidy check would then blame the wrong thing.
-
-The generate check exists because generated code is not rebuilt at build time. A stale
-committed copy compiles green and ships the wrong contract. A repo with no `//go:generate`
-directives is a no-op.
-
-#### Lint config
-
-`.golangci.yaml` at the root of this repo is the only one. A calling repo **must delete its
-own** `.golangci.yaml` or the workflow fails with an explicit error. The workflow checks this
-repo out at the reusable workflow's own commit, so a caller pinned to `@v2` gets the v2
-config, not main's.
-
-Repo-specific additions go in `.golangci.local.yaml` at the caller's root, merged over the
-canonical file with:
-
-```sh
-yq eval-all '. as $item ireduce ({}; . *+ $item)' .golangci.yaml .golangci.local.yaml
-```
-
-`*+` appends arrays, so the local file lists only what it adds. Copying a whole list into it
-produces the canonical entries plus yours.
-
-codarr, whose JSON is snake_case upstream and whose `fsx` package returns its own interfaces:
-
-```yaml
-# .golangci.local.yaml
-version: "2"
-linters:
-  settings:
-    tagliatelle:
-      case:
-        rules:
-          json: snake
-    ireturn:
-      allow:
-        - io.ReadSeekCloser
-        # fsx defines WriteSyncCloser, so every implementation of fsx.FS,
-        # including the test doubles, has to return it.
-        - fsx.WriteSyncCloser
-  exclusions:
-    rules:
-      # A constructor returning its own package's interface is the boundary pattern.
-      - path: internal/pkg/(clock|fsx|events)/
-        linters:
-          - ireturn
-      # The policy constants are deliberately package-level.
-      - path: internal/decide/policy\.go
-        linters:
-          - gochecknoglobals
-```
-
-bolan-api, which carries a `replace` directive:
-
-```yaml
-# .golangci.local.yaml
-version: "2"
-linters:
-  settings:
-    gomoddirectives:
-      replace-allow-list:
-        - github.com/ledongthuc/pdf
-```
-
-#### Makefile
-
-The same config drives `make lint` and CI, so the two cannot disagree. `lint-config` refetches
-on every run; drop it as a prerequisite if you want to lint offline. Add `.build/` to
-`.gitignore`.
-
-```make
-GO_LINT_CONFIG     ?= .build/golangci.yaml
-CANONICAL_LINT_URL := https://raw.githubusercontent.com/yama6a/gha/v2/.golangci.yaml
-IMAGE              ?= ghcr.io/yama6a/myapp
-
-.PHONY: lint-config generate fmt fmt-check lint vet test cover vuln tidy tidy-check \
-	generate-check mod image ci
-
-lint-config:
-	mkdir -p .build
-	curl -fsSL $(CANONICAL_LINT_URL) -o .build/canonical-golangci.yaml
-	if [ -f .golangci.local.yaml ]; then \
-		yq eval-all '. as $$item ireduce ({}; . *+ $$item)' \
-			.build/canonical-golangci.yaml .golangci.local.yaml > $(GO_LINT_CONFIG); \
-	else \
-		cp .build/canonical-golangci.yaml $(GO_LINT_CONFIG); \
-	fi
-
-generate:
-	go generate ./...
-
-fmt: lint-config
-	golangci-lint fmt -c $(GO_LINT_CONFIG)
-
-fmt-check: lint-config
-	golangci-lint fmt --diff -c $(GO_LINT_CONFIG)
-
-lint: lint-config
-	golangci-lint run ./... -c $(GO_LINT_CONFIG)
-
-vet:
-	go vet ./...
-
-test:
-	go test ./... -race -count=1
-
-cover:
-	go test ./... -coverprofile=cover.out -covermode=atomic
-	go tool cover -func=cover.out | tail -1
-
-vuln:
-	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
-
-tidy:
-	go mod tidy
-
-tidy-check:
-	go mod tidy
-	git diff --exit-code -- go.mod go.sum
-
-generate-check: generate
-	git diff --exit-code
-
-mod:
-	go get -u -t ./...
-	go mod tidy
-
-image:
-	docker buildx build -f .build/Dockerfile -t $(IMAGE) --load .
-
-ci: tidy-check generate-check fmt-check lint vet test vuln
-```
-
-### `node-ci.yaml`
-
-Generate drift, lint, format, typecheck, test, audit, build. Job id `check`, job name `node` -
-`node` is the required-check context to pin branch protection to.
-
-```yaml
-jobs:
-  node:
-    uses: yama6a/gha/.github/workflows/node-ci.yaml@v2
-    # with:
-    #   working-directory: web           # frontend not at the repo root
-    #   runner: ubuntu-24.04             # default: ubuntu-24.04-arm
-    #   build-env: |
-    #     NEXT_PUBLIC_USE_MOCK_DATA=true
-```
-
-| input | default | meaning |
-|---|---|---|
-| `working-directory` | `.` | where `package.json`, `package-lock.json` and `.nvmrc` live |
-| `build-env` | `''` | newline `KEY=VALUE` pairs, exported before the build step only |
-| `runner` | `ubuntu-24.04-arm` | |
-
-No toggles. Every project defines all six scripts; one that has nothing to do for a step defines
-it as `"exit 0"`, so the gap sits in `package.json` where a reader sees it.
-
-| script | what CI does with it |
-|---|---|
-| `generate` | runs it, then `git diff --exit-code` from the repo root; a dirty tree fails the job |
-| `lint` | eslint, with any repo-specific checks chained in (see below) |
-| `format:check` | `prettier --check .` |
-| `typecheck` | `tsc --noEmit` |
-| `test` | unit tests |
-| `build` | production build, after `build-env` is exported |
-
-`.nvmrc` is required (`24`), in `working-directory`, and is the only place the Node version is
-written. No `engines` field: two places to bump is one place to get them out of step, so
-`node.json5` tells Renovate to ignore that dep type.
-
-Repo-specific checks chain into `lint` rather than becoming their own job:
-
-```json
-"lint": "eslint && npm run lint:raw-colors && npm run lint:translations",
-"lint:raw-colors": "! grep -rn --include='*.tsx' -E '#[0-9a-fA-F]{3,8}' src/components/ui/",
-```
-
-Every project copies this `.prettierrc.json`:
-
-```json
-{
-  "printWidth": 100,
-  "singleQuote": true,
-  "overrides": [
-    { "files": ["*.html", "*.css", "*.json", "*.json5", "*.yaml", "*.yml"], "options": { "singleQuote": false } }
-  ]
-}
-```
-
-`.prettierignore` must list `package-lock.json` and every generated output dir. Prettier
-reformats generated files otherwise, and the `generate` drift check then fails on every run.
-
-### `playwright-e2e.yaml`
-
-Builds once, uploads the build, runs the suite sharded across parallel runners. Job id `gate`,
-job name `e2e` - that is the required check; the per-shard jobs are not, so `shard-total` can
-change without stranding a context.
-
-```yaml
-jobs:
-  e2e:
-    uses: yama6a/gha/.github/workflows/playwright-e2e.yaml@v2
-    with:
-      build-env: |
-        NEXT_PUBLIC_USE_MOCK_DATA=true
-      # shard-total: 4
-      # browser: chromium
-      # working-directory: web
-      # build-artifact-paths: |          # default is the three .next lines
-      #   dist
-```
-
-| input | default | meaning |
-|---|---|---|
-| `shard-total` | `4` | parallel shards |
-| `runner` | `ubuntu-24.04-arm` | must match the warm-cache caller, the cache key includes `runner.arch` |
-| `working-directory` | `.` | where `package.json` lives |
-| `build-env` | `''` | newline `KEY=VALUE` pairs, exported before the build step only |
-| `build-artifact-paths` | `.next`, `!.next/cache`, `!.next/standalone` | `upload-artifact` paths, relative to the repo root; the first non-`!` line is where the shards download it back to |
-| `browser` | `chromium` | |
-| `warm-cache` | `false` | run only the cache-warming job |
-
-`playwright.config.ts` starts the built app itself (`webServer`), so the shards serve the
-downloaded artifact instead of rebuilding. Set `workers: 2` in CI: a worker drives a whole
-Chromium and they all share one server.
-
-A cache written on a PR is restorable only by that same PR, so PRs never share one. A cache
-written on the default branch is restorable by all of them, which is what the second caller is
-for:
-
-```yaml
-# .github/workflows/warm-cache.yaml
-name: warm-cache
-
-on:
-  push:
-    branches: [master]   # the default branch, wherever the restorable caches have to be written
-    paths: ['package-lock.json']
-
-concurrency:
-  group: warm-cache
-  cancel-in-progress: true
-
-jobs:
-  warm:
-    uses: yama6a/gha/.github/workflows/playwright-e2e.yaml@v2
-    with:
-      warm-cache: true
-      runner: ubuntu-24.04-arm   # same runner as the e2e caller
-```
-
-Only on a lockfile change: both caches are keyed off it (the Playwright version lives there
-too), so a merge that leaves it alone leaves the existing caches valid.
+`RENOVATE_TOKEN` is a PAT: `GITHUB_TOKEN` cannot open PRs that trigger workflows.
 
 ## Renovate presets
 
-Three preset files at the repo root, so a consuming repo's `renovate.json5` holds only the rules
-that are actually about that repo.
-
-| preset | extends value | contents |
+| preset | extends | contents |
 |---|---|---|
-| `default.json5` | `github>yama6a/gha:default.json5` | `config:recommended`, dependency dashboard, digest pinning for actions and base images, the combined non-major auto-merged PR, and auto-merged GHA majors |
-| `go.json5` | `github>yama6a/gha:go.json5` | `gomodTidy` + `gomodUpdateImportPaths`, bumps the `go` directive, strict constraints filtering |
-| `node.json5` | `github>yama6a/gha:node.json5` | the vite, eslint and node major groupings, typescript held below 7, `engines` ignored |
+| `default.json5` | `github>yama6a/gha:default.json5` | `config:recommended`, dashboard, digest pinning, grouped auto-merged non-majors, auto-merged Actions majors |
+| `go.json5` | `github>yama6a/gha:go.json5` | `gomodTidy`, import-path rewrites, `go` directive bumps, strict constraints |
+| `node.json5` | `github>yama6a/gha:node.json5` | vite, eslint and node major groups, typescript below 7, `engines` ignored |
 
 ```json5
 {
   $schema: "https://docs.renovatebot.com/renovate-schema.json",
-  extends: [
-    "github>yama6a/gha:default.json5",
-    "github>yama6a/gha:node.json5", // or :go.json5, or both
-  ],
-  packageRules: [
-    // only what is specific to this repo; these append after the preset's and win on any key they set
-  ],
+  extends: ["github>yama6a/gha:default.json5", "github>yama6a/gha:go.json5"],
+  packageRules: [],  // only what is specific to this repo
 }
 ```
 
-The filename is spelled out in every reference. The bare `github>yama6a/gha` form only ever looks
-for `default.json`, and a `.json` file carrying comments is deprecated by Renovate.
-
-References are **not** pinned to a tag, unlike the workflows above: an edit here reaches every repo
-on its next Renovate run. Dry-run a consuming repo (`workflow_dispatch` with `dryRun: true`) before
-merging a change to these files.
+Spell the filename out; the bare `github>yama6a/gha` form looks for `default.json`. Presets are
+not tag-pinned: an edit reaches every repo on its next run, so dry-run a consumer first.
 
 ## Composite actions
 
-### `actions/validate-renovate-config`
+Each is a step after `actions/checkout`.
+
+### `actions/shell-checks`
+
+Pinned shellcheck 0.10.0 and `shfmt -d -i 2 -ci -bn -sr`. Policy lives in the repo's `.shellcheckrc`.
 
 ```yaml
-- uses: yama6a/gha/.github/actions/validate-renovate-config@v2
+- uses: yama6a/gha/.github/actions/shell-checks@v2
   # with:
-  #   config-file: renovate.json5
+  #   paths: lib/shell/*.sh   # default discovers *.sh and bash-shebang files
 ```
 
 ### `actions/yaml-checks`
 
-yamllint + actionlint. No inputs: it lints the whole repo against `.yamllint.yml` at this repo's root,
-so a rule change lands in every repo at once.
+yamllint with this repo's `.yamllint.yml` (a local one wins, and replaces it wholesale) plus
+actionlint. No inputs.
 
 ```yaml
 - uses: yama6a/gha/.github/actions/yaml-checks@v2
 ```
 
-A repo keeps its own `.yamllint.yml` only to extend `ignore:` (a generated directory, a vendored tree).
-That file replaces the canonical one rather than merging with it, so copy it and add the paths.
+### `actions/hadolint`
 
-### `actions/helm-chart-checks`
-
-Per chart: `helm dependency build` (skipped when `Chart.yaml` has no `dependencies:`), `helm lint`,
-`helm unittest` when `<chart>/tests` exists, then `helm template` piped to kubeconform. One `::group::`
-per chart, and every chart runs before the job fails.
-
-| input | default | what it does |
-|---|---|---|
-| `charts` | required | chart directories, one per line |
-| `helm-version` | `v4.3.0` | tag handed to `azure/setup-helm` |
-| `api-versions` | `monitoring.coreos.com/v1` | comma-separated, passed to `helm template --api-versions`, for a chart gated on a CRD |
-| `values` | none | lines of `<chart dir>=<values file>`, applied to that chart's lint and template |
-| `schema` | `off` | `check` regenerates `values.schema.json` and fails if it differs from the committed one |
-| `docs` | `off` | `check` regenerates the chart README with helm-docs and fails if it differs |
+Pinned hadolint 2.12.0 with this repo's `.hadolint.yaml` unless the repo has its own. Both docker
+workflows already run it.
 
 ```yaml
-- uses: yama6a/gha/.github/actions/helm-chart-checks@v2
-  with:
-    charts: charts/longhorn-replica-affinity
-```
-
-A shared chart whose templates `fail` on a missing required value renders to nothing on its own, so
-`values` is the only way it gets linted at all. The fixture is a values file the repo keeps for CI, not
-a real deployment.
-
-```yaml
-- uses: yama6a/gha/.github/actions/helm-chart-checks@v2
-  with:
-    charts: |
-      lib/helm/ingress
-      lib/helm/nfs-volume
-      lib/helm/pg-cluster
-      lib/helm/redis-instance
-    values: |
-      lib/helm/pg-cluster=.github/testdata/helm/pg-cluster.yaml
-      lib/helm/redis-instance=.github/testdata/helm/redis-instance.yaml
-    schema: check
+- uses: yama6a/gha/.github/actions/hadolint@v2
+  # with:
+  #   dockerfiles: .build/Dockerfile   # default discovers Dockerfile* recursively
 ```
 
 ### `actions/kubeconform`
 
-Installs a pinned kubeconform and, with `paths`, validates them. Without `paths` it only
-installs, and exports the resolved flags as `KUBECONFORM_ARGS` for a caller that pipes
-rendered YAML in on stdin.
+Pinned kubeconform. With `paths` it validates them; without, it only installs and exports the
+resolved flags as `KUBECONFORM_ARGS` for a caller that pipes rendered YAML in.
 
 ```yaml
 - uses: yama6a/gha/.github/actions/kubeconform@v2
   with:
     paths: lib/k8s/*.yaml
-    # crd-catalog: false   # core types only, skip the datreeio schema location
-    # parallelism: 8
-
-# or, install only:
-- uses: yama6a/gha/.github/actions/kubeconform@v2
-- run: |
-    # shellcheck disable=SC2086
-    helm template ./chart | kubeconform $KUBECONFORM_ARGS
 ```
 
-### `actions/shell-checks`
-
-shellcheck 0.10.0 and shfmt 3.10.0, both pinned. The runner image ships shellcheck 0.9.0, and a
-runner-image bump would otherwise red-light six repos at once.
-
-```yaml
-- uses: yama6a/gha/.github/actions/shell-checks@v2
-  # with:
-  #   paths: lib/shell/*.sh   # empty discovers *.sh plus extensionless bash-shebang files
-```
-
-No `-S` and no `-e`. Severity and suppressed codes belong in the repo's own `.shellcheckrc`,
-which shellcheck reads by itself, so a suppression stays reviewable in the repo it applies to.
-
-shfmt always runs as `shfmt -d -i 2 -ci -bn -sr`, and the flags are not an input: shfmt takes
-its options from `.editorconfig` when no printer flag is given, and passing one turns that
-lookup off, so a stray `.editorconfig` cannot move CI.
-
-### `actions/hadolint`
-
-hadolint 2.12.0, pinned. Uses the repo's own `.hadolint.yaml` when it has one and the canonical
-one at the root of this repo otherwise.
-
-```yaml
-- uses: yama6a/gha/.github/actions/hadolint@v2
-  # with:
-  #   dockerfiles: .build/Dockerfile   # empty discovers Dockerfile* recursively
-```
-
-`failure-threshold: info`, so style findings are advisory and everything else fails the job.
-Three rules are off everywhere:
-
-| rule | why |
+| input | default |
 |---|---|
-| `DL3008` | apt version pins go stale. Debian drops old versions from the archive on every point release, so a `pkg=ver` that passes today fails in a few weeks. The digest-pinned base image is what makes the build reproducible. |
-| `DL3018` | the same for apk: Alpine only carries the current version of a package per branch. |
-| `DL3006` | `FROM ${IMAGE}` with no default is deliberate in the image-builder repos, so a bare `docker build` fails instead of quietly producing an unpinned image. |
+| `version` | `v0.6.7` |
+| `paths` | none |
+| `strict` | `true` |
+| `ignore-missing-schemas` | `true` |
+| `crd-catalog` | `true`; adds the datreeio CRDs catalog |
+| `parallelism` | kubeconform's default |
 
-Both `docker-build-release` workflows already run this, so a repo that only builds images
-through them has no reason to call it directly.
+### `actions/helm-chart-checks`
 
-Repo-specific extras (helm/kubeconform validation, per-app npm test suites) stay
-local to each repo - only the pieces that were byte-for-byte duplicated across 3+ repos live
-here.
+Per chart: dependency build, `helm lint`, `helm unittest` when `tests/` exists, `helm template`
+piped to kubeconform, optional schema and README drift checks.
+
+```yaml
+- uses: yama6a/gha/.github/actions/helm-chart-checks@v2
+  with:
+    charts: |
+      lib/helm/pg-cluster
+      lib/helm/redis-instance
+    values: |
+      lib/helm/pg-cluster=lib/helm/pg-cluster/ci/values.yaml
+```
+
+| input | default |
+|---|---|
+| `charts` | required; one per line |
+| `helm-version` | `v4.3.0` |
+| `api-versions` | `monitoring.coreos.com/v1` |
+| `values` | none; `<chart>=<values file>` lines, for charts that `fail` without values |
+| `schema` | `off`; `check` regenerates `values.schema.json` and fails on drift |
+| `docs` | `off`; `check` regenerates the README with helm-docs and fails on drift |
+
+### `actions/validate-renovate-config`
+
+```yaml
+- uses: yama6a/gha/.github/actions/validate-renovate-config@v2
+```
 
 ## Scripts
 
 ### `scripts/repo-settings.sh`
 
-Applies the merge, security and branch-protection settings from
-[ORG_CONVENTIONS.md](ORG_CONVENTIONS.md) to every repo, driven by one table at the top of the
-script. Needs `jq` and a `gh` logged in as a repo admin.
+Applies merge, security and branch-protection settings to every repo from the table at the top of
+the script. Needs `jq` and `gh` as a repo admin.
 
 ```bash
-scripts/repo-settings.sh --dry-run   # print every gh api call, change nothing
-scripts/repo-settings.sh             # apply; re-running changes nothing
-scripts/repo-settings.sh --verify    # intended vs actual per repo, exit 1 on any mismatch
+scripts/repo-settings.sh --dry-run   # print every call
+scripts/repo-settings.sh             # apply, idempotent
+scripts/repo-settings.sh --verify    # intended vs actual, exit 1 on mismatch
 ```
 
-One line per repo, pipe-separated. Contexts are comma-separated and carry spaces and slashes, which
-is why the fields are not:
+## Templates
 
-```
-repo | default branch | merge commits | visibility | required contexts
-gha  | main           | false         | public     | yaml,renovate-presets
-```
-
-Edit the table, dry-run it, then apply. `--dry-run` also prints the id of any ruleset named `main`
-it would delete.
+`templates/Makefile.go`: the Go Makefile every Go repo copies. `make lint` fetches the canonical
+lint config and merges `.golangci.local.yaml` the same way CI does.

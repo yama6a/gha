@@ -53,10 +53,8 @@ them report on a PR, so the PR sits pending forever.
 - image: `.build/Dockerfile`, `gcr.io/distroless/static:nonroot`. A binary that needs an OS
   (shelling out, glibc, CA tooling) uses debian-slim or alpine, digest-pinned.
 
-```make
-.PHONY: lint-config generate fmt fmt-check lint vet test cover vuln tidy tidy-check \
-	generate-check mod image ci
-```
+- Makefile: a copy of `templates/Makefile.go` from gha, repo extras added below it; `ci` runs
+  the same checks as go-ci.
 
 ## Frontend
 
