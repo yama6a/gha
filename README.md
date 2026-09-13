@@ -93,16 +93,19 @@ permissions:
 
 jobs:
   build-push:
-    uses: yama6a/gha/.github/workflows/docker-build-release.yaml@v1
+    uses: yama6a/gha/.github/workflows/docker-build-release.yaml@v2
     with:
       dockerfile: .build/Dockerfile   # default: Dockerfile
       # build-command: npm ci && npm run build
+      # build-args: |
+      #   VERSION=${{ needs.tag.outputs.semver }}
       # version: ${{ needs.tag.outputs.semver }}   # use this string instead of the integer counter
+      # create-release: false   # the caller publishes more artifacts (a chart) and tags itself afterwards
 
   deploy:
     needs: build-push
     permissions: {}   # the block above is workflow-wide; scope it back off for jobs that do not build
-    uses: yama6a/gha/.github/workflows/deploy-gitops.yaml@v1
+    uses: yama6a/gha/.github/workflows/deploy-gitops.yaml@v2
 ```
 
 All four `permissions` lines are required. A reusable workflow's jobs can only request what the

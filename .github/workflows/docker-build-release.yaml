@@ -20,6 +20,14 @@ on:
         description: Release version to use verbatim; empty computes the next integer from the latest release
         type: string
         default: ''
+      build-args:
+        description: Newline-separated KEY=VALUE pairs, passed straight to docker/build-push-action
+        type: string
+        default: ''
+      create-release:
+        description: Create the GitHub release here; false when the caller publishes more artifacts first and tags itself
+        type: boolean
+        default: true
     outputs:
       version:
         description: The release version that was built and pushed
@@ -115,6 +123,7 @@ jobs:
           context: ${{ inputs.context }}
           file: ${{ inputs.dockerfile }}
           platforms: ${{ inputs.platforms }}  # a multi-platform value pushes a manifest list, one image per arch
+          build-args: ${{ inputs.build-args }}
           push: true
           provenance: mode=max
           sbom: true
@@ -162,6 +171,7 @@ jobs:
 
       # Only tag a release once the image has actually been pushed.
       - name: Create GitHub release
+        if: inputs.create-release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ steps.version.outputs.version }}
