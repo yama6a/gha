@@ -1,0 +1,3 @@
+schemaRoot:
+  title: smoke values
+  additionalProperties: false

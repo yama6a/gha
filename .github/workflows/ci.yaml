@@ -57,6 +57,37 @@ jobs:
           # shellcheck disable=SC2086
           kubeconform $KUBECONFORM_ARGS < .github/testdata/kubeconform/valid.yaml
 
+  helm-chart-checks:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - uses: ./.github/actions/helm-chart-checks
+        with:
+          charts: .github/testdata/helm/smoke
+
+      - uses: ./.github/actions/helm-chart-checks
+        with:
+          charts: .github/testdata/helm/smoke
+          schema: check
+          docs: check
+
+      - id: broken
+        continue-on-error: true
+        uses: ./.github/actions/helm-chart-checks
+        with:
+          charts: .github/testdata/helm/broken
+
+      - name: the broken chart must fail the action
+        env:
+          OUTCOME: ${{ steps.broken.outcome }}
+        run: |
+          set -euo pipefail
+          if [ "$OUTCOME" != failure ]; then
+            echo "::error::helm-chart-checks accepted a chart whose Deployment has a string replicas"
+            exit 1
+          fi
+
   # Both binaries are pinned rather than taken from the runner image, so the fixtures also have
   # to prove the pinned ones are what ran.
   shell-checks:

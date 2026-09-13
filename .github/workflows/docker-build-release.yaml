@@ -82,13 +82,14 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      - name: Cache the npm download cache
+      - name: Cache the npm store
         if: inputs.build-command != ''
         uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.npm
           key: npm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}
-          restore-keys: npm-${{ runner.os }}-${{ runner.arch }}-
+          restore-keys: |
+            npm-${{ runner.os }}-${{ runner.arch }}-
 
       # Built here, not in the Dockerfile: the image only COPYs the build output, so this runs once on the
       # runner instead of once per target arch under emulation.

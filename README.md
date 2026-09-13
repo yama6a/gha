@@ -6,6 +6,9 @@ to a tagged release (`@v1`), not `@main`.
 This repo also hosts the shared Renovate presets, which are referenced by content rather than
 by tag. See [Renovate presets](#renovate-presets).
 
+How the repos themselves are set up - merges, branch protection, required-check names, per-stack
+rules - is in [ORG_CONVENTIONS.md](ORG_CONVENTIONS.md).
+
 ## Reusable workflows
 
 ### `renovate.yaml`
@@ -170,25 +173,125 @@ jobs:
 
 ### `node-ci.yaml`
 
-Lint, typecheck, test, audit, build - on by default, so a new repo never quietly ships
-without them. Disable the ones that don't apply.
+Generate drift, lint, format, typecheck, test, audit, build. Job id `check`, job name `node` -
+`node` is the required-check context to pin branch protection to.
 
 ```yaml
 jobs:
-  ci:
-    uses: yama6a/gha/.github/workflows/node-ci.yaml@v1
-    with:
-      package-manager: pnpm   # default: npm
-      # typecheck: false      # e.g. a plain-JS repo with no tsconfig
-      # test: false           # e.g. a repo with no test script yet
-      # build-env: |
-      #   NEXT_PUBLIC_USE_MOCK_DATA=true
-      # working-directory: web            # frontend not at the repo root
-      # pre-check: make generate          # monorepo codegen a check depends on
+  node:
+    uses: yama6a/gha/.github/workflows/node-ci.yaml@v2
+    # with:
+    #   working-directory: web           # frontend not at the repo root
+    #   runner: ubuntu-24.04             # default: ubuntu-24.04-arm
+    #   build-env: |
+    #     NEXT_PUBLIC_USE_MOCK_DATA=true
 ```
 
-Assumes the standard script names: `lint`, `typecheck`, `test`, `build`. A repo whose scripts
-are named differently renames the script rather than adding an override here.
+| input | default | meaning |
+|---|---|---|
+| `working-directory` | `.` | where `package.json`, `package-lock.json` and `.nvmrc` live |
+| `build-env` | `''` | newline `KEY=VALUE` pairs, exported before the build step only |
+| `runner` | `ubuntu-24.04-arm` | |
+
+No toggles. Every project defines all six scripts; one that has nothing to do for a step defines
+it as `"exit 0"`, so the gap sits in `package.json` where a reader sees it.
+
+| script | what CI does with it |
+|---|---|
+| `generate` | runs it, then `git diff --exit-code` from the repo root; a dirty tree fails the job |
+| `lint` | eslint, with any repo-specific checks chained in (see below) |
+| `format:check` | `prettier --check .` |
+| `typecheck` | `tsc --noEmit` |
+| `test` | unit tests |
+| `build` | production build, after `build-env` is exported |
+
+`.nvmrc` is required (`24`), in `working-directory`, and is the only place the Node version is
+written. No `engines` field: two places to bump is one place to get them out of step, so
+`node.json5` tells Renovate to ignore that dep type.
+
+Repo-specific checks chain into `lint` rather than becoming their own job:
+
+```json
+"lint": "eslint && npm run lint:raw-colors && npm run lint:translations",
+"lint:raw-colors": "! grep -rn --include='*.tsx' -E '#[0-9a-fA-F]{3,8}' src/components/ui/",
+```
+
+Every project copies this `.prettierrc.json`:
+
+```json
+{
+  "printWidth": 100,
+  "singleQuote": true,
+  "overrides": [
+    { "files": ["*.html", "*.css", "*.json", "*.json5", "*.yaml", "*.yml"], "options": { "singleQuote": false } }
+  ]
+}
+```
+
+`.prettierignore` must list `package-lock.json` and every generated output dir. Prettier
+reformats generated files otherwise, and the `generate` drift check then fails on every run.
+
+### `playwright-e2e.yaml`
+
+Builds once, uploads the build, runs the suite sharded across parallel runners. Job id `gate`,
+job name `e2e` - that is the required check; the per-shard jobs are not, so `shard-total` can
+change without stranding a context.
+
+```yaml
+jobs:
+  e2e:
+    uses: yama6a/gha/.github/workflows/playwright-e2e.yaml@v2
+    with:
+      build-env: |
+        NEXT_PUBLIC_USE_MOCK_DATA=true
+      # shard-total: 4
+      # browser: chromium
+      # working-directory: web
+      # build-artifact-paths: |          # default is the three .next lines
+      #   dist
+```
+
+| input | default | meaning |
+|---|---|---|
+| `shard-total` | `4` | parallel shards |
+| `runner` | `ubuntu-24.04-arm` | must match the warm-cache caller, the cache key includes `runner.arch` |
+| `working-directory` | `.` | where `package.json` lives |
+| `build-env` | `''` | newline `KEY=VALUE` pairs, exported before the build step only |
+| `build-artifact-paths` | `.next`, `!.next/cache`, `!.next/standalone` | `upload-artifact` paths, relative to the repo root; the first non-`!` line is where the shards download it back to |
+| `browser` | `chromium` | |
+| `warm-cache` | `false` | run only the cache-warming job |
+
+`playwright.config.ts` starts the built app itself (`webServer`), so the shards serve the
+downloaded artifact instead of rebuilding. Set `workers: 2` in CI: a worker drives a whole
+Chromium and they all share one server.
+
+A cache written on a PR is restorable only by that same PR, so PRs never share one. A cache
+written on the default branch is restorable by all of them, which is what the second caller is
+for:
+
+```yaml
+# .github/workflows/warm-cache.yaml
+name: warm-cache
+
+on:
+  push:
+    branches: [master]   # the default branch, wherever the restorable caches have to be written
+    paths: ['package-lock.json']
+
+concurrency:
+  group: warm-cache
+  cancel-in-progress: true
+
+jobs:
+  warm:
+    uses: yama6a/gha/.github/workflows/playwright-e2e.yaml@v2
+    with:
+      warm-cache: true
+      runner: ubuntu-24.04-arm   # same runner as the e2e caller
+```
+
+Only on a lockfile change: both caches are keyed off it (the Playwright version lives there
+too), so a merge that leaves it alone leaves the existing caches valid.
 
 ## Renovate presets
 
@@ -233,12 +336,53 @@ merging a change to these files.
 
 ### `actions/yaml-checks`
 
-yamllint + actionlint.
+yamllint + actionlint. No inputs: it lints the whole repo against `.yamllint.yml` at this repo's root,
+so a rule change lands in every repo at once.
 
 ```yaml
 - uses: yama6a/gha/.github/actions/yaml-checks@v1
-  # with:
-  #   yamllint-config: .yamllint.yml
+```
+
+A repo keeps its own `.yamllint.yml` only to extend `ignore:` (a generated directory, a vendored tree).
+That file replaces the canonical one rather than merging with it, so copy it and add the paths.
+
+### `actions/helm-chart-checks`
+
+Per chart: `helm dependency build` (skipped when `Chart.yaml` has no `dependencies:`), `helm lint`,
+`helm unittest` when `<chart>/tests` exists, then `helm template` piped to kubeconform. One `::group::`
+per chart, and every chart runs before the job fails.
+
+| input | default | what it does |
+|---|---|---|
+| `charts` | required | chart directories, one per line |
+| `helm-version` | `v4.3.0` | tag handed to `azure/setup-helm` |
+| `api-versions` | `monitoring.coreos.com/v1` | comma-separated, passed to `helm template --api-versions`, for a chart gated on a CRD |
+| `values` | none | lines of `<chart dir>=<values file>`, applied to that chart's lint and template |
+| `schema` | `off` | `check` regenerates `values.schema.json` and fails if it differs from the committed one |
+| `docs` | `off` | `check` regenerates the chart README with helm-docs and fails if it differs |
+
+```yaml
+- uses: yama6a/gha/.github/actions/helm-chart-checks@v1
+  with:
+    charts: charts/longhorn-replica-affinity
+```
+
+A shared chart whose templates `fail` on a missing required value renders to nothing on its own, so
+`values` is the only way it gets linted at all. The fixture is a values file the repo keeps for CI, not
+a real deployment.
+
+```yaml
+- uses: yama6a/gha/.github/actions/helm-chart-checks@v1
+  with:
+    charts: |
+      lib/helm/ingress
+      lib/helm/nfs-volume
+      lib/helm/pg-cluster
+      lib/helm/redis-instance
+    values: |
+      lib/helm/pg-cluster=.github/testdata/helm/pg-cluster.yaml
+      lib/helm/redis-instance=.github/testdata/helm/redis-instance.yaml
+    schema: check
 ```
 
 ### `actions/kubeconform`
@@ -305,3 +449,28 @@ through them has no reason to call it directly.
 Repo-specific extras (helm/kubeconform validation, per-app npm test suites) stay
 local to each repo - only the pieces that were byte-for-byte duplicated across 3+ repos live
 here.
+
+## Scripts
+
+### `scripts/repo-settings.sh`
+
+Applies the merge, security and branch-protection settings from
+[ORG_CONVENTIONS.md](ORG_CONVENTIONS.md) to every repo, driven by one table at the top of the
+script. Needs `jq` and a `gh` logged in as a repo admin.
+
+```bash
+scripts/repo-settings.sh --dry-run   # print every gh api call, change nothing
+scripts/repo-settings.sh             # apply; re-running changes nothing
+scripts/repo-settings.sh --verify    # intended vs actual per repo, exit 1 on any mismatch
+```
+
+One line per repo, pipe-separated. Contexts are comma-separated and carry spaces and slashes, which
+is why the fields are not:
+
+```
+repo | default branch | merge commits | visibility | required contexts
+gha  | main           | false         | public     | yaml,renovate-presets
+```
+
+Edit the table, dry-run it, then apply. `--dry-run` also prints the id of any ruleset named `main`
+it would delete.

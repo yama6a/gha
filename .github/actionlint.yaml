@@ -1,3 +1,8 @@
+# ubuntu-slim is a GitHub-hosted label that actionlint 1.7.7 does not know yet.
+self-hosted-runner:
+  labels:
+    - ubuntu-slim
+
 paths:
   .github/workflows/docker-build-release*.yaml:
     ignore:
