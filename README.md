@@ -309,12 +309,53 @@ merging a change to these files.
 
 ### `actions/yaml-checks`
 
-yamllint + actionlint.
+yamllint + actionlint. No inputs: it lints the whole repo against `.yamllint.yml` at this repo's root,
+so a rule change lands in every repo at once.
 
 ```yaml
 - uses: yama6a/gha/.github/actions/yaml-checks@v1
-  # with:
-  #   yamllint-config: .yamllint.yml
+```
+
+A repo keeps its own `.yamllint.yml` only to extend `ignore:` (a generated directory, a vendored tree).
+That file replaces the canonical one rather than merging with it, so copy it and add the paths.
+
+### `actions/helm-chart-checks`
+
+Per chart: `helm dependency build` (skipped when `Chart.yaml` has no `dependencies:`), `helm lint`,
+`helm unittest` when `<chart>/tests` exists, then `helm template` piped to kubeconform. One `::group::`
+per chart, and every chart runs before the job fails.
+
+| input | default | what it does |
+|---|---|---|
+| `charts` | required | chart directories, one per line |
+| `helm-version` | `v4.3.0` | tag handed to `azure/setup-helm` |
+| `api-versions` | `monitoring.coreos.com/v1` | comma-separated, passed to `helm template --api-versions`, for a chart gated on a CRD |
+| `values` | none | lines of `<chart dir>=<values file>`, applied to that chart's lint and template |
+| `schema` | `off` | `check` regenerates `values.schema.json` and fails if it differs from the committed one |
+| `docs` | `off` | `check` regenerates the chart README with helm-docs and fails if it differs |
+
+```yaml
+- uses: yama6a/gha/.github/actions/helm-chart-checks@v1
+  with:
+    charts: charts/longhorn-replica-affinity
+```
+
+A shared chart whose templates `fail` on a missing required value renders to nothing on its own, so
+`values` is the only way it gets linted at all. The fixture is a values file the repo keeps for CI, not
+a real deployment.
+
+```yaml
+- uses: yama6a/gha/.github/actions/helm-chart-checks@v1
+  with:
+    charts: |
+      lib/helm/ingress
+      lib/helm/nfs-volume
+      lib/helm/pg-cluster
+      lib/helm/redis-instance
+    values: |
+      lib/helm/pg-cluster=.github/testdata/helm/pg-cluster.yaml
+      lib/helm/redis-instance=.github/testdata/helm/redis-instance.yaml
+    schema: check
 ```
 
 ### `actions/kubeconform`

@@ -1,0 +1,148 @@
+name: Helm chart checks
+description: Lints, unit-tests, renders and kubeconforms a list of Helm charts, optionally checking values.schema.json and README drift.
+inputs:
+  charts:
+    description: Chart directories to check, one per line
+    required: true
+  helm-version:
+    description: helm release tag
+    required: false
+    default: v4.3.0
+  api-versions:
+    description: Comma-separated apiVersions handed to helm template --api-versions, for a chart gated on a CRD
+    required: false
+    default: monitoring.coreos.com/v1
+  values:
+    description: >-
+      Lines of <chart dir>=<values file>, applied to lint and template for that chart. A shared chart whose
+      templates `fail` on a missing required value renders to nothing without one, so this is the only way
+      such a chart gets linted at all.
+    required: false
+    default: ''
+  schema:
+    description: check regenerates values.schema.json and fails if it differs from the committed one
+    required: false
+    default: 'off'
+  docs:
+    description: check regenerates the chart README and fails if it differs from the committed one
+    required: false
+    default: 'off'
+runs:
+  using: composite
+  steps:
+    - uses: azure/setup-helm@9bc31f4ebc9c6b171d7bfbaa5d006ae7abdb4310 # v5.0.1
+      with:
+        version: ${{ inputs.helm-version }}
+
+    - name: install helm plugins
+      shell: bash
+      env:
+        SCHEMA: ${{ inputs.schema }}
+      run: |
+        set -euo pipefail
+        verify=()
+        # helm 4 refuses an unsigned plugin source unless verification is waived; helm 3 has no such flag
+        if helm plugin install --help | grep -q -- '--verify'; then verify=(--verify=false); fi
+        # a second call of this action in the same job would otherwise die on "plugin already exists"
+        install() { helm plugin list | grep -q "^$1[[:space:]]" || helm plugin install "$2" --version "$3" "${verify[@]}"; }
+        install unittest https://github.com/helm-unittest/helm-unittest v1.1.2
+        if [ "$SCHEMA" = check ]; then
+          install schema https://github.com/losisin/helm-values-schema-json v2.6.0
+        fi
+        helm plugin list
+
+    - name: install helm-docs
+      if: inputs.docs == 'check'
+      shell: bash
+      run: |
+        set -euo pipefail
+        arch="$(dpkg --print-architecture)"
+        if [ "$arch" = amd64 ]; then arch=x86_64; fi
+        curl -fsSL "https://github.com/norwoodj/helm-docs/releases/download/v1.14.2/helm-docs_1.14.2_Linux_${arch}.tar.gz" \
+          | tar xz helm-docs
+        sudo mv helm-docs /usr/local/bin/
+        helm-docs --version
+
+    # Install only; the loop below pipes each rendered chart in on stdin and needs KUBECONFORM_ARGS.
+    - uses: $/.github/actions/kubeconform
+
+    - name: check charts
+      shell: bash
+      env:
+        CHARTS: ${{ inputs.charts }}
+        API_VERSIONS: ${{ inputs.api-versions }}
+        VALUES: ${{ inputs.values }}
+        SCHEMA: ${{ inputs.schema }}
+        DOCS: ${{ inputs.docs }}
+      run: |
+        set -uo pipefail
+
+        declare -A values_of=()
+        while read -r pair; do
+          [ -n "$pair" ] || continue
+          values_of["${pair%%=*}"]="${pair#*=}"
+        done <<< "$VALUES"
+
+        api=()
+        [ -n "$API_VERSIONS" ] && api=(--api-versions "$API_VERSIONS")
+
+        fail=0
+        while read -r chart; do
+          [ -n "$chart" ] || continue
+          echo "::group::$chart"
+          rc=0
+
+          vals=()
+          [ -n "${values_of[$chart]:-}" ] && vals=(-f "${values_of[$chart]}")
+
+          if grep -q '^dependencies:' "$chart/Chart.yaml"; then
+            # helm resolves a classic (https) dependency only through a locally registered repo, the same way
+            # ArgoCD's repo-server does. OCI and file:// deps need none.
+            grep -oE 'repository:[[:space:]]*"?https://[^" ]+' "$chart/Chart.yaml" \
+              | sed -E 's/repository:[[:space:]]*"?//' | sort -u | while read -r url; do
+                  helm repo add "r$(printf '%s' "$url" | cksum | cut -d' ' -f1)" "$url" >/dev/null 2>&1 || true
+                done
+            helm dependency build "$chart" || rc=1
+          fi
+
+          helm lint "$chart" "${vals[@]}" || rc=1
+
+          if [ -d "$chart/tests" ]; then
+            helm unittest "$chart" || rc=1
+          fi
+
+          if rendered=$(helm template "$chart" "${api[@]}" "${vals[@]}" 2>&1); then
+            # KUBECONFORM_ARGS is meant to split into words here
+            # shellcheck disable=SC2086
+            printf '%s\n' "$rendered" | kubeconform $KUBECONFORM_ARGS || rc=1
+          else
+            printf '%s\n' "$rendered"
+            rc=1
+          fi
+
+          if [ "$SCHEMA" = check ]; then
+            # run from the chart dir: the plugin reads values.yaml and .schema.yaml and writes its output
+            # relative to CWD, not to a chart argument
+            (cd "$chart" && helm schema) || rc=1
+          fi
+
+          if [ "$DOCS" = check ]; then
+            helm-docs --chart-search-root="$chart" || rc=1
+          fi
+
+          if [ "$SCHEMA" = check ] || [ "$DOCS" = check ]; then
+            # charts/ and Chart.lock are helm dependency build output above, not generator drift
+            scope=("$chart" ":(exclude)$chart/charts" ":(exclude)$chart/Chart.lock")
+            dirty="$(git status --porcelain -- "${scope[@]}")"
+            if [ -n "$dirty" ]; then
+              git --no-pager diff -- "${scope[@]}"
+              printf '%s\n' "$dirty"
+              echo "::error::$chart: generated files are stale, re-run helm schema / helm-docs and commit"
+              rc=1
+            fi
+          fi
+
+          [ "$rc" = 0 ] || { echo "::error::helm chart checks failed: $chart"; fail=1; }
+          echo "::endgroup::"
+        done <<< "$CHARTS"
+        exit $fail
