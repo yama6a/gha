@@ -1,0 +1,4 @@
+FROM alpine:3.22
+RUN cd /tmp && curl -fsSL https://example.com/install | sh
+USER 1000
+ENTRYPOINT ["true"]

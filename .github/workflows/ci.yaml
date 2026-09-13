@@ -87,3 +87,52 @@ jobs:
             echo "::error::helm-chart-checks accepted a chart whose Deployment has a string replicas"
             exit 1
           fi
+
+  # Both binaries are pinned rather than taken from the runner image, so the fixtures also have
+  # to prove the pinned ones are what ran.
+  shell-checks:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - uses: ./.github/actions/shell-checks
+        with:
+          paths: .github/testdata/shell/clean.sh
+
+      - name: the pinned shellcheck is the one on PATH
+        run: |
+          shellcheck --version | grep -qx 'version: 0.10.0'
+
+      - name: an unformatted script fails shfmt
+        run: |
+          set -uo pipefail
+          if shfmt -d -i 2 -ci -bn -sr .github/testdata/shell/unformatted.sh; then
+            echo "::error::shfmt accepted a script it has to reformat"
+            exit 1
+          fi
+
+      - name: an unquoted expansion fails shellcheck
+        run: |
+          set -uo pipefail
+          if shellcheck .github/testdata/shell/unquoted.sh; then
+            echo "::error::shellcheck accepted an unquoted expansion"
+            exit 1
+          fi
+
+  hadolint:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      # Dockerfile.unpinned-apt is the ignore list earning its keep: DL3008 would otherwise fail it.
+      - uses: ./.github/actions/hadolint
+        with:
+          dockerfiles: .github/testdata/hadolint/Dockerfile.clean .github/testdata/hadolint/Dockerfile.unpinned-apt
+
+      - name: a piped shell install still fails
+        run: |
+          set -uo pipefail
+          if hadolint --config .hadolint.yaml .github/testdata/hadolint/Dockerfile.bad; then
+            echo "::error::hadolint accepted the DL3003 and DL4006 fixture"
+            exit 1
+          fi
