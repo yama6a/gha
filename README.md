@@ -1,7 +1,7 @@
 # gha
 
 Shared GitHub Actions workflows and composite actions for yama6a repos. Pin every reference
-to a tagged release (`@v1`), not `@main`.
+to a tagged release (`@v2`), not `@main`.
 
 This repo also hosts the shared Renovate presets, which are referenced by content rather than
 by tag. See [Renovate presets](#renovate-presets).
@@ -38,7 +38,7 @@ on:
 
 jobs:
   renovate:
-    uses: yama6a/gha/.github/workflows/renovate.yaml@v1
+    uses: yama6a/gha/.github/workflows/renovate.yaml@v2
     with:
       log-level: ${{ inputs.logLevel || 'info' }}
       dry-run: ${{ inputs.dryRun || false }}
@@ -58,12 +58,12 @@ job that needs the build job's output tag.
 ```yaml
 jobs:
   build-push:
-    uses: yama6a/gha/.github/workflows/docker-build-release.yaml@v1
+    uses: yama6a/gha/.github/workflows/docker-build-release.yaml@v2
     # ...
 
   deploy:
     needs: build-push
-    uses: yama6a/gha/.github/workflows/deploy-gitops.yaml@v1
+    uses: yama6a/gha/.github/workflows/deploy-gitops.yaml@v2
     with:
       tag: ${{ needs.build-push.outputs.version }}
       values-path: argo_apps/workloads/charts/myapp/values.yaml
@@ -93,16 +93,19 @@ permissions:
 
 jobs:
   build-push:
-    uses: yama6a/gha/.github/workflows/docker-build-release.yaml@v1
+    uses: yama6a/gha/.github/workflows/docker-build-release.yaml@v2
     with:
       dockerfile: .build/Dockerfile   # default: Dockerfile
       # build-command: npm ci && npm run build
+      # build-args: |
+      #   VERSION=${{ needs.tag.outputs.semver }}
       # version: ${{ needs.tag.outputs.semver }}   # use this string instead of the integer counter
+      # create-release: false   # the caller publishes more artifacts (a chart) and tags itself afterwards
 
   deploy:
     needs: build-push
     permissions: {}   # the block above is workflow-wide; scope it back off for jobs that do not build
-    uses: yama6a/gha/.github/workflows/deploy-gitops.yaml@v1
+    uses: yama6a/gha/.github/workflows/deploy-gitops.yaml@v2
 ```
 
 All four `permissions` lines are required. A reusable workflow's jobs can only request what the
@@ -137,7 +140,7 @@ permissions:
 
 jobs:
   build-push:
-    uses: yama6a/gha/.github/workflows/docker-build-release-multiarch.yaml@v1
+    uses: yama6a/gha/.github/workflows/docker-build-release-multiarch.yaml@v2
     with:
       build-args: |
         NEXT_PUBLIC_API_URL_CLIENT=https://api.example.com
@@ -468,7 +471,7 @@ merging a change to these files.
 ### `actions/validate-renovate-config`
 
 ```yaml
-- uses: yama6a/gha/.github/actions/validate-renovate-config@v1
+- uses: yama6a/gha/.github/actions/validate-renovate-config@v2
   # with:
   #   config-file: renovate.json5
 ```
@@ -479,7 +482,7 @@ yamllint + actionlint. No inputs: it lints the whole repo against `.yamllint.yml
 so a rule change lands in every repo at once.
 
 ```yaml
-- uses: yama6a/gha/.github/actions/yaml-checks@v1
+- uses: yama6a/gha/.github/actions/yaml-checks@v2
 ```
 
 A repo keeps its own `.yamllint.yml` only to extend `ignore:` (a generated directory, a vendored tree).
@@ -501,7 +504,7 @@ per chart, and every chart runs before the job fails.
 | `docs` | `off` | `check` regenerates the chart README with helm-docs and fails if it differs |
 
 ```yaml
-- uses: yama6a/gha/.github/actions/helm-chart-checks@v1
+- uses: yama6a/gha/.github/actions/helm-chart-checks@v2
   with:
     charts: charts/longhorn-replica-affinity
 ```
@@ -511,7 +514,7 @@ A shared chart whose templates `fail` on a missing required value renders to not
 a real deployment.
 
 ```yaml
-- uses: yama6a/gha/.github/actions/helm-chart-checks@v1
+- uses: yama6a/gha/.github/actions/helm-chart-checks@v2
   with:
     charts: |
       lib/helm/ingress
@@ -531,14 +534,14 @@ installs, and exports the resolved flags as `KUBECONFORM_ARGS` for a caller that
 rendered YAML in on stdin.
 
 ```yaml
-- uses: yama6a/gha/.github/actions/kubeconform@v1
+- uses: yama6a/gha/.github/actions/kubeconform@v2
   with:
     paths: lib/k8s/*.yaml
     # crd-catalog: false   # core types only, skip the datreeio schema location
     # parallelism: 8
 
 # or, install only:
-- uses: yama6a/gha/.github/actions/kubeconform@v1
+- uses: yama6a/gha/.github/actions/kubeconform@v2
 - run: |
     # shellcheck disable=SC2086
     helm template ./chart | kubeconform $KUBECONFORM_ARGS
@@ -550,7 +553,7 @@ shellcheck 0.10.0 and shfmt 3.10.0, both pinned. The runner image ships shellche
 runner-image bump would otherwise red-light six repos at once.
 
 ```yaml
-- uses: yama6a/gha/.github/actions/shell-checks@v1
+- uses: yama6a/gha/.github/actions/shell-checks@v2
   # with:
   #   paths: lib/shell/*.sh   # empty discovers *.sh plus extensionless bash-shebang files
 ```
@@ -568,7 +571,7 @@ hadolint 2.12.0, pinned. Uses the repo's own `.hadolint.yaml` when it has one an
 one at the root of this repo otherwise.
 
 ```yaml
-- uses: yama6a/gha/.github/actions/hadolint@v1
+- uses: yama6a/gha/.github/actions/hadolint@v2
   # with:
   #   dockerfiles: .build/Dockerfile   # empty discovers Dockerfile* recursively
 ```
