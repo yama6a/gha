@@ -412,8 +412,8 @@ that are actually about that repo.
 | preset | extends value | contents |
 |---|---|---|
 | `default.json5` | `github>yama6a/gha:default.json5` | `config:recommended`, dependency dashboard, digest pinning for actions and base images, the combined non-major auto-merged PR, and auto-merged GHA majors |
-| `go.json5` | `github>yama6a/gha:go.json5` | `gomodTidy` + `gomodUpdateImportPaths` |
-| `node.json5` | `github>yama6a/gha:node.json5` | the vite and eslint major groupings, and the typescript 5.x hold |
+| `go.json5` | `github>yama6a/gha:go.json5` | `gomodTidy` + `gomodUpdateImportPaths`, bumps the `go` directive, strict constraints filtering |
+| `node.json5` | `github>yama6a/gha:node.json5` | the vite, eslint and node major groupings, typescript held below 7, `engines` ignored |
 
 ```json5
 {
