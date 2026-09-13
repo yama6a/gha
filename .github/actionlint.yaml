@@ -1,0 +1,5 @@
+paths:
+  .github/workflows/go-ci.yaml:
+    ignore:
+      # actionlint 1.7.7 does not carry job_workflow_sha in its github context type.
+      - 'property "job_workflow_sha" is not defined'

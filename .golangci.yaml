@@ -1,0 +1,168 @@
+# Canonical config for every yama6a Go repo. go-ci.yaml fetches it at the reusable
+# workflow's own SHA; a repo adds to it through .golangci.local.yaml, never by
+# keeping its own copy of this file.
+version: "2"
+linters:
+  # See available linters here: https://golangci-lint.run/usage/linters/
+  enable:
+    - asasalint
+    - asciicheck
+    - bidichk
+    - bodyclose
+    - canonicalheader
+    - containedctx
+    - contextcheck
+    - copyloopvar
+    - cyclop
+    - decorder
+    - dogsled
+    - dupl
+    - dupword
+    - durationcheck
+    - errcheck
+    - errchkjson
+    - errname
+    - errorlint
+    - exhaustive
+    - exptostd
+    - fatcontext
+    - forcetypeassert
+    - ginkgolinter
+    - gocheckcompilerdirectives
+    - gochecknoglobals
+    - gochecknoinits
+    - gochecksumtype
+    - gocognit
+    - gocritic
+    - gocyclo
+    - godot
+    - goheader
+    - gomoddirectives
+    - gomodguard_v2
+    - goprintffuncname
+    - gosec
+    - gosmopolitan
+    - grouper
+    - iface
+    - importas
+    - inamedparam
+    - ineffassign
+    - interfacebloat
+    - intrange
+    - ireturn
+    - loggercheck
+    - maintidx
+    - makezero
+    - mirror
+    - misspell
+    - musttag
+    - nakedret
+    - nestif
+    - nilerr
+    - nilnesserr
+    - nilnil
+    - noctx
+    - nolintlint
+    - nosprintfhostport
+    - paralleltest
+    - prealloc
+    - predeclared
+    - promlinter
+    - protogetter
+    - reassign
+    - recvcheck
+    - revive
+    - rowserrcheck
+    - sloglint
+    - spancheck
+    - sqlclosecheck
+    - staticcheck
+    - tagalign
+    - tagliatelle
+    - testableexamples
+    - testifylint
+    - thelper
+    - tparallel
+    - unconvert
+    - unparam
+    - unused
+    - usestdlibvars
+    - usetesting
+    - wastedassign
+    - whitespace
+    - wrapcheck
+    - zerologlint
+  settings:
+    gosec:
+      excludes:
+        - G115  # int/uint size conversions, flagged on every bounded conversion
+        - G101  # DSN and URL templates with a %s placeholder read as hardcoded credentials
+    ireturn:
+      allow:
+        - anon
+        - error
+        - empty
+        - stdlib
+        - generic
+        - go.uber.org/zap/zapcore.Core
+    interfacebloat:
+      max: 15
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      # Generated OpenAPI clients and servers use names like Id and Url.
+      - path: (^|/)api/
+        linters:
+          - revive
+          - tagliatelle
+        text: var-naming
+      - path: (^|/)api/
+        linters:
+          - ireturn
+      # Every StrictServerInterface method returns a response interface generated
+      # from the spec, so satisfying ireturn would mean not implementing it.
+      - path: internal/api/
+        linters:
+          - ireturn
+      - path: cmd/
+        linters:
+          - ireturn
+      # t.Setenv forbids t.Parallel.
+      - path: internal/config/
+        linters:
+          - paralleltest
+      - path: _test\.go
+        linters:
+          - dupl
+          - funlen
+          - gocognit
+          - gocyclo
+          - cyclop
+          - maintidx
+          - gochecknoglobals
+          - forcetypeassert
+      # Prometheus collectors are package-level and registered in init.
+      - path: internal/(pkg/)?metrics/
+        linters:
+          - gochecknoglobals
+          - gochecknoinits
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  enable:
+    - gofmt
+    - gofumpt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
