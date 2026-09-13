@@ -11,9 +11,9 @@ bolan-fe                    | master | false | private | node / node,e2e / e2e,r
 bolan-self-crawler          | main   | false | private | go / go,renovate-config
 codarr                      | main   | false | public  | go / go,node / node,renovate-config
 gha                         | main   | false | public  | yaml,renovate-presets,kubeconform,shell-checks,hadolint,helm-chart-checks
-longhorn-replica-affinity   | main   | false | public  | release label,go / go,chart,renovate-config
-offgrid                     | main   | false | public  | helm,shell,yaml,renovate-config
-offgrid-private             | main   | true  | private | helm,shell,yaml,renovate-config
+longhorn-replica-affinity   | main   | false | public  | release label,go / go,chart,yaml,renovate-config
+offgrid                     | main   | false | public  | helm,shell,yaml,renovate-config,chart-tests
+offgrid-private             | main   | true  | private | helm,shell,yaml,renovate-config,chart-tests
 pi5-k8s-sample-app          | main   | false | public  | go / go,renovate-config
 pontiki-website             | main   | false | private | node / node,links,renovate-config
 praxis                      | main   | false | public  | node / node,renovate-config
