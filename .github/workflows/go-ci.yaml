@@ -2,39 +2,6 @@ name: Go PR CI (reusable)
 
 on:
   workflow_call:
-    inputs:
-      go-version-file:
-        type: string
-        default: go.mod
-      golangci-args:
-        type: string
-        default: --timeout 5m ./...
-      tidy-check:
-        description: Fail if go mod tidy would change go.mod/go.sum
-        type: boolean
-        default: false
-      fmt-check:
-        description: Fail if the formatters golangci-lint is configured with would rewrite anything
-        type: boolean
-        default: false
-      race:
-        description: Run go test with -race
-        type: boolean
-        default: false
-      coverage:
-        description: Run go test with a coverage profile and print the summary
-        type: boolean
-        default: false
-      test-args:
-        description: Extra flags appended to go test, e.g. -count=1 to defeat the result cache
-        type: string
-        default: ''
-      cross-compile:
-        description: >-
-          Newline-separated GOOS/GOARCH targets to build after the tests, e.g. linux/amd64.
-          Empty builds nothing beyond what the tests already compile.
-        type: string
-        default: ''
 
 jobs:
   check:
@@ -47,57 +14,93 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
         with:
-          go-version-file: ${{ inputs.go-version-file }}
+          go-version-file: go.mod
           cache: true
 
       # A stale go.mod/go.sum still builds, so nothing else here would catch it.
+      # Runs before go generate, which can edit go.mod through `go run -mod=mod`.
       - name: go mod tidy is committed
-        if: inputs.tidy-check
         run: |
+          set -euo pipefail
           go mod tidy
           git diff --exit-code -- go.mod go.sum \
-            || { echo "::error::go.mod/go.sum are not tidy; run 'go mod tidy' and commit"; exit 1; }
+            || { echo "::error::go.mod/go.sum are not tidy; run 'make tidy' and commit"; exit 1; }
 
-      - name: Install govulncheck
+      # Generated code is never rebuilt at build time, so a stale committed copy
+      # compiles green and ships the wrong contract. The diff covers the whole
+      # tree, not just the generated files, to catch a generator that edits go.mod.
+      - name: go generate output is committed
         run: |
-          go install golang.org/x/vuln/cmd/govulncheck@latest
-          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+          set -euo pipefail
+          go generate ./...
+          git diff --exit-code \
+            || { echo "::error::generated code is stale; run 'make generate' and commit"; exit 1; }
+          untracked="$(git status --porcelain --untracked-files=all)"
+          if [ -n "$untracked" ]; then
+            echo "$untracked"
+            echo "::error::go generate produced new files; run 'make generate' and commit"
+            exit 1
+          fi
 
-      - name: Run govulncheck
-        run: govulncheck ./...
+      # job_workflow_sha is the SHA of this reusable workflow's own commit, so a
+      # caller pinned to @v2 gets the v2 config and never main's.
+      - name: Fetch the canonical lint config
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: yama6a/gha
+          ref: ${{ github.job_workflow_sha }}
+          path: .gha
+          sparse-checkout: .golangci.yaml
+          sparse-checkout-cone-mode: false  # cone mode selects directories, not one file
+
+      # `*+` appends arrays, so .golangci.local.yaml lists only its additions.
+      - name: Build the lint config
+        run: |
+          set -euo pipefail
+          if [ -f .golangci.yaml ] || [ -f .golangci.yml ]; then
+            echo "::error::delete this repo's .golangci.yaml; yama6a/gha holds the only one. Repo-specific additions go in .golangci.local.yaml"
+            exit 1
+          fi
+          if [ -f .golangci.local.yaml ]; then
+            # shellcheck disable=SC2016  # the yq expression is not shell
+            yq eval-all '. as $item ireduce ({}; . *+ $item)' \
+              .gha/.golangci.yaml .golangci.local.yaml > /tmp/golangci.yaml
+          else
+            cp .gha/.golangci.yaml /tmp/golangci.yaml
+          fi
+          rm -rf .gha
 
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a  # v9.3.0
         with:
-          args: ${{ inputs.golangci-args }}
+          args: --timeout 5m -c /tmp/golangci.yaml ./...
 
-      # `run` does not enforce the formatters, so check them separately. golangci-lint-action
-      # puts the binary on PATH, so this reuses that install rather than fetching its own.
+      # `run` does not enforce the formatters, so check them separately. Without
+      # -c this only runs gofmt, and gofumpt and goimports go unchecked.
+      # golangci-lint-action put the binary on PATH.
       - name: Check formatting
-        if: inputs.fmt-check
-        run: golangci-lint fmt --diff
+        run: golangci-lint fmt --diff -c /tmp/golangci.yaml
 
       - name: Run go vet
         run: go vet ./...
 
+      # setup-go restores GOCACHE, so without -count=1 go test serves cached results.
       - name: Run go test
-        run: go test ./... -v ${{ inputs.race && '-race' || '' }} ${{ inputs.coverage && '-coverprofile=cover.out' || '' }} ${{ inputs.test-args }}
+        run: go test ./... -race -count=1 -coverprofile=cover.out
 
       - name: Coverage summary
-        if: inputs.coverage
         run: go tool cover -func=cover.out | tail -1
 
-      # A repo that ships a manifest list runs CI on one arch only, so a compile error on the
-      # other would first surface at release time.
+      - name: Run govulncheck
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+      # Every Go repo here ships a multi-arch image, and CI runs on one arch, so a
+      # compile error on the other would first surface at release time.
       - name: Cross-compile
-        if: inputs.cross-compile != ''
-        env:
-          TARGETS: ${{ inputs.cross-compile }}
         run: |
           set -euo pipefail
-          while read -r target; do
-            [ -n "$target" ] || continue
+          for target in linux/amd64 linux/arm64; do
             echo "::group::build $target"
             CGO_ENABLED=0 GOOS="${target%%/*}" GOARCH="${target##*/}" go build ./...
             echo "::endgroup::"
-          done <<< "$TARGETS"
+          done

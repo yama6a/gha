@@ -126,22 +126,160 @@ jobs:
 
 ### `go-ci.yaml`
 
-golangci-lint, go vet, go test, govulncheck. The job is named `go`, so that is the
-required-check context a caller pins branch protection to.
+No inputs. Every check below runs on every call.
 
 ```yaml
 jobs:
   go:
-    uses: yama6a/gha/.github/workflows/go-ci.yaml@v1
-    with:
-      tidy-check: true
-      race: true
-      coverage: true
-      # fmt-check: true          # golangci-lint fmt --diff; `run` does not enforce formatters
-      # test-args: -count=1      # go test otherwise serves cached results from the restored GOCACHE
-      # cross-compile: |         # for a repo whose release is a manifest list
-      #   linux/amd64
-      #   linux/arm64
+    uses: yama6a/gha/.github/workflows/go-ci.yaml@v2
+```
+
+Job id `go`, job name `go`, so the required-check context to pin branch protection to is
+`go / go`.
+
+| step | command |
+|---|---|
+| tidy check | `go mod tidy`, then `git diff --exit-code -- go.mod go.sum` |
+| generate check | `go generate ./...`, then the whole worktree must be unchanged and free of new files |
+| lint | `golangci-lint run --timeout 5m -c <merged config> ./...` |
+| fmt check | `golangci-lint fmt --diff -c <merged config>` |
+| vet | `go vet ./...` |
+| test | `go test ./... -race -count=1 -coverprofile=cover.out`, then the coverage total |
+| vuln | `go run golang.org/x/vuln/cmd/govulncheck@latest ./...` |
+| cross-compile | `CGO_ENABLED=0 go build ./...` for linux/amd64 and linux/arm64 |
+
+Tidy runs before generate: a generator invoked with `go run -mod=mod` can edit go.mod, and the
+tidy check would then blame the wrong thing.
+
+The generate check exists because generated code is not rebuilt at build time. A stale
+committed copy compiles green and ships the wrong contract. A repo with no `//go:generate`
+directives is a no-op.
+
+#### Lint config
+
+`.golangci.yaml` at the root of this repo is the only one. A calling repo **must delete its
+own** `.golangci.yaml` or the workflow fails with an explicit error. The workflow checks this
+repo out at the reusable workflow's own commit, so a caller pinned to `@v2` gets the v2
+config, not main's.
+
+Repo-specific additions go in `.golangci.local.yaml` at the caller's root, merged over the
+canonical file with:
+
+```sh
+yq eval-all '. as $item ireduce ({}; . *+ $item)' .golangci.yaml .golangci.local.yaml
+```
+
+`*+` appends arrays, so the local file lists only what it adds. Copying a whole list into it
+produces the canonical entries plus yours.
+
+codarr, whose JSON is snake_case upstream and whose `fsx` package returns its own interfaces:
+
+```yaml
+# .golangci.local.yaml
+version: "2"
+linters:
+  settings:
+    tagliatelle:
+      case:
+        rules:
+          json: snake
+    ireturn:
+      allow:
+        - io.ReadSeekCloser
+        # fsx defines WriteSyncCloser, so every implementation of fsx.FS,
+        # including the test doubles, has to return it.
+        - fsx.WriteSyncCloser
+  exclusions:
+    rules:
+      # A constructor returning its own package's interface is the boundary pattern.
+      - path: internal/pkg/(clock|fsx|events)/
+        linters:
+          - ireturn
+      # The policy constants are deliberately package-level.
+      - path: internal/decide/policy\.go
+        linters:
+          - gochecknoglobals
+```
+
+bolan-api, which carries a `replace` directive:
+
+```yaml
+# .golangci.local.yaml
+version: "2"
+linters:
+  settings:
+    gomoddirectives:
+      replace-allow-list:
+        - github.com/ledongthuc/pdf
+```
+
+#### Makefile
+
+The same config drives `make lint` and CI, so the two cannot disagree. `lint-config` refetches
+on every run; drop it as a prerequisite if you want to lint offline. Add `.build/` to
+`.gitignore`.
+
+```make
+GO_LINT_CONFIG     ?= .build/golangci.yaml
+CANONICAL_LINT_URL := https://raw.githubusercontent.com/yama6a/gha/v2/.golangci.yaml
+IMAGE              ?= ghcr.io/yama6a/myapp
+
+.PHONY: lint-config generate fmt fmt-check lint vet test cover vuln tidy tidy-check \
+	generate-check mod image ci
+
+lint-config:
+	mkdir -p .build
+	curl -fsSL $(CANONICAL_LINT_URL) -o .build/canonical-golangci.yaml
+	if [ -f .golangci.local.yaml ]; then \
+		yq eval-all '. as $$item ireduce ({}; . *+ $$item)' \
+			.build/canonical-golangci.yaml .golangci.local.yaml > $(GO_LINT_CONFIG); \
+	else \
+		cp .build/canonical-golangci.yaml $(GO_LINT_CONFIG); \
+	fi
+
+generate:
+	go generate ./...
+
+fmt: lint-config
+	golangci-lint fmt -c $(GO_LINT_CONFIG)
+
+fmt-check: lint-config
+	golangci-lint fmt --diff -c $(GO_LINT_CONFIG)
+
+lint: lint-config
+	golangci-lint run ./... -c $(GO_LINT_CONFIG)
+
+vet:
+	go vet ./...
+
+test:
+	go test ./... -race -count=1
+
+cover:
+	go test ./... -coverprofile=cover.out -covermode=atomic
+	go tool cover -func=cover.out | tail -1
+
+vuln:
+	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+
+tidy:
+	go mod tidy
+
+tidy-check:
+	go mod tidy
+	git diff --exit-code -- go.mod go.sum
+
+generate-check: generate
+	git diff --exit-code
+
+mod:
+	go get -u -t ./...
+	go mod tidy
+
+image:
+	docker buildx build -f .build/Dockerfile -t $(IMAGE) --load .
+
+ci: tidy-check generate-check fmt-check lint vet test vuln
 ```
 
 ### `node-ci.yaml`
@@ -274,8 +412,8 @@ that are actually about that repo.
 | preset | extends value | contents |
 |---|---|---|
 | `default.json5` | `github>yama6a/gha:default.json5` | `config:recommended`, dependency dashboard, digest pinning for actions and base images, the combined non-major auto-merged PR, and auto-merged GHA majors |
-| `go.json5` | `github>yama6a/gha:go.json5` | `gomodTidy` + `gomodUpdateImportPaths` |
-| `node.json5` | `github>yama6a/gha:node.json5` | the vite and eslint major groupings, and the typescript 5.x hold |
+| `go.json5` | `github>yama6a/gha:go.json5` | `gomodTidy` + `gomodUpdateImportPaths`, bumps the `go` directive, strict constraints filtering |
+| `node.json5` | `github>yama6a/gha:node.json5` | the vite, eslint and node major groupings, typescript held below 7, `engines` ignored |
 
 ```json5
 {
