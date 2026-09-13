@@ -1,0 +1,5 @@
+ignored:
+  - DL3008  # apt pins: Debian drops old versions from the archive on every point release, so a pinned pkg=ver fails weeks later; the digest-pinned base image is where reproducibility comes from
+  - DL3018  # apk pins: same, Alpine only carries the current version per branch
+  - DL3006  # FROM ${IMAGE} with no default is deliberate in the image-builder repos so a bare docker build fails instead of producing an unpinned image
+failure-threshold: info

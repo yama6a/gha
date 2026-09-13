@@ -1,0 +1,79 @@
+name: Shell checks
+description: >-
+  Runs a pinned shellcheck and shfmt over a repo's shell scripts. shellcheck policy
+  (severity, suppressed codes) belongs in the repo's own .shellcheckrc, which shellcheck
+  reads on its own, so this action passes neither -S nor -e.
+inputs:
+  paths:
+    description: >-
+      Files to check. Empty discovers *.sh plus extensionless files whose first line is a
+      bash shebang, skipping .git, node_modules and charts/*/charts.
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    # Pinned rather than taken from the runner image, which ships 0.9.0: a runner-image bump
+    # would otherwise red-light six repos at once.
+    - name: install shellcheck and shfmt
+      shell: bash
+      run: |
+        set -euo pipefail
+        case "$(uname -m)" in
+          aarch64) sc_arch=aarch64 shfmt_arch=arm64 ;;
+          x86_64) sc_arch=x86_64 shfmt_arch=amd64 ;;
+          *) echo "::error::unsupported runner architecture $(uname -m)" && exit 1 ;;
+        esac
+        dir="$(mktemp -d)"
+        curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/v0.10.0/shellcheck-v0.10.0.linux.${sc_arch}.tar.xz" \
+          | tar -xJ -C "$dir" --strip-components=1 "shellcheck-v0.10.0/shellcheck"
+        curl -fsSL -o "$dir/shfmt" "https://github.com/mvdan/sh/releases/download/v3.10.0/shfmt_v3.10.0_linux_${shfmt_arch}"
+        chmod +x "$dir/shfmt"
+        echo "$dir" >> "$GITHUB_PATH"
+        "$dir/shellcheck" --version
+        "$dir/shfmt" --version
+
+    - name: resolve paths
+      shell: bash
+      env:
+        PATHS: ${{ inputs.paths }}
+      run: |
+        set -euo pipefail
+        list="$(mktemp)"
+        if [ -n "$PATHS" ]; then
+          # the input is a whitespace-separated list of paths and globs, so it has to split
+          # shellcheck disable=SC2086
+          printf '%s\n' $PATHS > "$list"
+        else
+          find . \( -name .git -o -name node_modules -o -path './charts/*/charts' \) -prune -o -type f -print \
+            | while IFS= read -r f; do
+              case "${f##*/}" in
+                *.sh) echo "$f" ;;
+                *.*) ;;
+                *)
+                  if head -n 1 "$f" | grep -qE '^#!.*bash'; then echo "$f"; fi
+                  ;;
+              esac
+            done | LC_ALL=C sort > "$list"
+        fi
+        echo "SHELL_CHECK_LIST=$list" >> "$GITHUB_ENV"
+        echo "checking $(wc -l < "$list") file(s)"
+        cat "$list"
+
+    - name: shellcheck
+      shell: bash
+      run: |
+        set -euo pipefail
+        mapfile -t files < "$SHELL_CHECK_LIST"
+        if [ "${#files[@]}" -eq 0 ]; then exit 0; fi
+        shellcheck "${files[@]}"
+
+    # shfmt takes its options from .editorconfig, which no repo here has, and any printer flag
+    # on the command line turns that lookup off, so a stray .editorconfig cannot move CI.
+    - name: shfmt
+      shell: bash
+      run: |
+        set -euo pipefail
+        mapfile -t files < "$SHELL_CHECK_LIST"
+        if [ "${#files[@]}" -eq 0 ]; then exit 0; fi
+        shfmt -d -i 2 -ci -bn -sr "${files[@]}"

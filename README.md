@@ -76,15 +76,16 @@ Requires a `DEPLOY_TOKEN` secret with write access to the target repo.
 
 ### `docker-build-release.yaml`
 
-Determines the next integer release version, optionally runs a build command (for a static
-site or SPA the Dockerfile only `COPY`s), builds and pushes a multi-arch image to GHCR, tags a
-GitHub release. Outputs `version` for a following `deploy-gitops.yaml` call.
+hadolint, next integer release version, an optional build command (for a static site or SPA the
+Dockerfile only `COPY`s), a multi-arch image pushed to GHCR, a trivy scan, a signed provenance
+attestation, a GitHub release. Outputs `version` for a following `deploy-gitops.yaml` call.
 
 ```yaml
-# A reusable workflow's jobs can request only what the caller grants here.
 permissions:
-  contents: write
-  packages: write
+  contents: write      # create the GitHub release
+  packages: write      # push the image
+  id-token: write      # mint the OIDC token the attestation is signed with
+  attestations: write  # store the attestation
 
 jobs:
   build-push:
@@ -92,9 +93,28 @@ jobs:
     with:
       dockerfile: .build/Dockerfile   # default: Dockerfile
       # build-command: npm ci && npm run build
-      # node-version: '24'
-      # package-manager: pnpm   # default: npm; only affects which setup-node cache/lockfile it looks for
+      # version: ${{ needs.tag.outputs.semver }}   # use this string instead of the integer counter
+
+  deploy:
+    needs: build-push
+    permissions: {}   # the block above is workflow-wide; scope it back off for jobs that do not build
+    uses: yama6a/gha/.github/workflows/deploy-gitops.yaml@v1
 ```
+
+All four `permissions` lines are required. A reusable workflow's jobs can only request what the
+caller grants, and a missing `attestations: write` surfaces three quarters of the way through
+the run, after the image is already pushed.
+
+`build-command` runs on the runner rather than in the Dockerfile, so it happens once instead of
+once per target arch under emulation. Node comes from the repo's `.nvmrc` and the package
+manager is npm; neither is an input.
+
+Trivy scans a throwaway `ci-<run_id>` tag, which the release tag is then copied from with
+`docker buildx imagetools create` - a two-platform QEMU build cannot `--load` a manifest list,
+so there is nothing local to scan. The copy is byte-identical, so the digest that was scanned is
+the digest that gets attested and released. The scan is report-only today: CRITICAL and HIGH,
+fixed vulnerabilities only, printed as a table, `exit-code: '0'`. Once a repo has had a week of
+output and a `.trivyignore` covering what it decides to carry, flip that one line to `'1'`.
 
 Does not cover a build that cannot run under QEMU (e.g. `next build`, which SIGILLs under
 emulation) - use `docker-build-release-multiarch.yaml` for that.
@@ -105,10 +125,11 @@ Same job as above, but each platform builds on its own native runner and the res
 are joined into one manifest list. Use when the build cannot run under QEMU emulation.
 
 ```yaml
-# A reusable workflow's jobs can request only what the caller grants here.
 permissions:
-  contents: write
-  packages: write
+  contents: write      # create the GitHub release
+  packages: write      # push the image
+  id-token: write      # mint the OIDC token the attestation is signed with
+  attestations: write  # store the attestation
 
 jobs:
   build-push:
@@ -116,10 +137,16 @@ jobs:
     with:
       build-args: |
         NEXT_PUBLIC_API_URL_CLIENT=https://api.example.com
+      # version: ${{ needs.tag.outputs.semver }}
       # platforms: >-
       #   [{"platform":"linux/amd64","runner":"ubuntu-latest"},
       #    {"platform":"linux/arm64","runner":"ubuntu-24.04-arm"}]   # default
 ```
+
+hadolint runs once, in the `version` job. Each arch is scanned on its own native runner right
+after its digest is pushed, so nothing is emulated; the provenance is attested once, on the
+finished manifest list. The scan is report-only on the same terms as above, and `merge` needs
+`build`, so enforcing it would block the manifest rather than only the report.
 
 ### `go-ci.yaml`
 
@@ -234,15 +261,47 @@ rendered YAML in on stdin.
     helm template ./chart | kubeconform $KUBECONFORM_ARGS
 ```
 
-### `actions/shellcheck`
+### `actions/shell-checks`
+
+shellcheck 0.10.0 and shfmt 3.10.0, both pinned. The runner image ships shellcheck 0.9.0, and a
+runner-image bump would otherwise red-light six repos at once.
 
 ```yaml
-- uses: yama6a/gha/.github/actions/shellcheck@v1
-  with:
-    glob: lib/shell/*.sh
-    exclude: SC2034
+- uses: yama6a/gha/.github/actions/shell-checks@v1
+  # with:
+  #   paths: lib/shell/*.sh   # empty discovers *.sh plus extensionless bash-shebang files
 ```
 
-Repo-specific extras (helm/kubeconform validation, hadolint, per-app npm test suites) stay
+No `-S` and no `-e`. Severity and suppressed codes belong in the repo's own `.shellcheckrc`,
+which shellcheck reads by itself, so a suppression stays reviewable in the repo it applies to.
+
+shfmt always runs as `shfmt -d -i 2 -ci -bn -sr`, and the flags are not an input: shfmt takes
+its options from `.editorconfig` when no printer flag is given, and passing one turns that
+lookup off, so a stray `.editorconfig` cannot move CI.
+
+### `actions/hadolint`
+
+hadolint 2.12.0, pinned. Uses the repo's own `.hadolint.yaml` when it has one and the canonical
+one at the root of this repo otherwise.
+
+```yaml
+- uses: yama6a/gha/.github/actions/hadolint@v1
+  # with:
+  #   dockerfiles: .build/Dockerfile   # empty discovers Dockerfile* recursively
+```
+
+`failure-threshold: info`, so style findings are advisory and everything else fails the job.
+Three rules are off everywhere:
+
+| rule | why |
+|---|---|
+| `DL3008` | apt version pins go stale. Debian drops old versions from the archive on every point release, so a `pkg=ver` that passes today fails in a few weeks. The digest-pinned base image is what makes the build reproducible. |
+| `DL3018` | the same for apk: Alpine only carries the current version of a package per branch. |
+| `DL3006` | `FROM ${IMAGE}` with no default is deliberate in the image-builder repos, so a bare `docker build` fails instead of quietly producing an unpinned image. |
+
+Both `docker-build-release` workflows already run this, so a repo that only builds images
+through them has no reason to call it directly.
+
+Repo-specific extras (helm/kubeconform validation, per-app npm test suites) stay
 local to each repo - only the pieces that were byte-for-byte duplicated across 3+ repos live
 here.

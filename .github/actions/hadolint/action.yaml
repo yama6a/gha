@@ -1,0 +1,55 @@
+name: Hadolint
+description: >-
+  Runs a pinned hadolint over a repo's Dockerfiles, against the repo's own .hadolint.yaml
+  when it has one and the shared config in this repo otherwise.
+inputs:
+  dockerfiles:
+    description: >-
+      Dockerfiles to lint. Empty discovers Dockerfile* recursively, skipping .git and
+      node_modules.
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    - name: install hadolint
+      shell: bash
+      run: |
+        set -euo pipefail
+        case "$(uname -m)" in
+          aarch64) arch=arm64 ;;
+          x86_64) arch=x86_64 ;;
+          *) echo "::error::unsupported runner architecture $(uname -m)" && exit 1 ;;
+        esac
+        dir="$(mktemp -d)"
+        curl -fsSL -o "$dir/hadolint" \
+          "https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-${arch}"
+        chmod +x "$dir/hadolint"
+        echo "$dir" >> "$GITHUB_PATH"
+        "$dir/hadolint" --version
+
+    - name: hadolint
+      shell: bash
+      env:
+        DOCKERFILES: ${{ inputs.dockerfiles }}
+        # a composite action runs out of a checkout of the repo it lives in, so this is gha's root
+        SHARED_CONFIG: ${{ github.action_path }}/../../../.hadolint.yaml
+      run: |
+        set -euo pipefail
+        if [ -f .hadolint.yaml ]; then config=.hadolint.yaml; else config="$SHARED_CONFIG"; fi
+        if [ -n "$DOCKERFILES" ]; then
+          # the input is a whitespace-separated list of paths and globs, so it has to split
+          # shellcheck disable=SC2206
+          files=($DOCKERFILES)
+        else
+          mapfile -t files < <(
+            find . \( -name .git -o -name node_modules \) -prune -o -type f -name 'Dockerfile*' -print \
+              | LC_ALL=C sort
+          )
+        fi
+        if [ "${#files[@]}" -eq 0 ]; then
+          echo "no Dockerfiles found"
+          exit 0
+        fi
+        echo "config: $config"
+        hadolint --config "$config" "${files[@]}"
