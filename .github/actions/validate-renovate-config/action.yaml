@@ -2,12 +2,59 @@ name: Validate renovate config
 description: Renovate silently falls back to its defaults on a broken config, so validate it explicitly in CI.
 inputs:
   config-file:
-    description: Path to the renovate config file; empty lets renovate-config-validator auto-discover it
+    description: Renovate config file(s), space separated; empty lets renovate-config-validator auto-discover it
+    required: false
+    default: ''
+  extra-paths:
+    description: Additional path globs, one per line, whose change also triggers the validation
     required: false
     default: ''
 runs:
   using: composite
   steps:
-    - name: Validate renovate config
+    - name: Build the change filter
+      id: paths
       shell: bash
-      run: npx --yes --package renovate -- renovate-config-validator --strict ${{ inputs.config-file }}
+      env:
+        CONFIG_FILE: ${{ inputs.config-file }}
+        EXTRA_PATHS: ${{ inputs.extra-paths }}
+      run: |
+        set -euo pipefail
+        if [ -n "$CONFIG_FILE" ]; then
+          # shellcheck disable=SC2086
+          paths=$(printf '%s\n' $CONFIG_FILE)
+        else
+          # renovate-config-validator's auto-discovery list, minus package.json: a `renovate` key
+          # there is rare and would rerun this on every dependency bump.
+          paths=$(printf '%s\n' \
+            renovate.json renovate.json5 \
+            .github/renovate.json .github/renovate.json5 \
+            .gitlab/renovate.json .gitlab/renovate.json5 \
+            .renovaterc .renovaterc.json .renovaterc.json5)
+        fi
+        {
+          echo 'filters<<FILTERS'
+          echo 'config:'
+          printf '%s\n%s\n' "$paths" "$EXTRA_PATHS" | sed -n "s/^[[:space:]]*\(.\+\)$/  - '\1'/p"
+          echo 'FILTERS'
+        } >> "$GITHUB_OUTPUT"
+
+    - name: Did the config change
+      id: filter
+      # Only these two events carry a base to diff against; everything else validates unconditionally.
+      if: github.event_name == 'pull_request' || github.event_name == 'push'
+      uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
+      with:
+        token: ''  # git diff instead of the PR files API, which needs pull-requests: read from every caller
+        filters: ${{ steps.paths.outputs.filters }}
+
+    - name: Validate renovate config
+      if: steps.filter.outcome == 'skipped' || steps.filter.outputs.config == 'true'
+      shell: bash
+      env:
+        RENOVATE_VERSION: 44.93.4
+        CONFIG_FILE: ${{ inputs.config-file }}
+      run: |
+        set -euo pipefail
+        # shellcheck disable=SC2086
+        npx --yes --package "renovate@$RENOVATE_VERSION" -- renovate-config-validator --strict $CONFIG_FILE

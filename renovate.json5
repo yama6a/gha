@@ -3,6 +3,7 @@
   // the API from the default branch, so it resolves independently of the checkout.
   // Which manager owns what:
   //   github-actions  the action pins in .github/workflows/*.yaml and .github/actions/*/action.yaml
+  //   regex           the renovate npm pin behind validate-renovate-config
   // Cadence is the cron in .github/workflows/renovate.yaml, not an internal `schedule`, so a manual
   // workflow_dispatch works too.
   //
@@ -11,4 +12,13 @@
   // merged bump to actually reach them, which is the gate.
   $schema: "https://docs.renovatebot.com/renovate-schema.json",
   extends: ["github>yama6a/gha:default.json5"],
+  customManagers: [
+    {
+      customType: "regex",
+      managerFilePatterns: [".github/actions/validate-renovate-config/action.yaml"],
+      matchStrings: ["RENOVATE_VERSION: (?<currentValue>\\S+)"],
+      depNameTemplate: "renovate",
+      datasourceTemplate: "npm",
+    },
+  ],
 }

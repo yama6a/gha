@@ -25,6 +25,7 @@ jobs:
       - uses: ./.github/actions/validate-renovate-config
         with:
           config-file: default.json5 go.json5 node.json5
+          extra-paths: .github/actions/validate-renovate-config/**
 
   # The only composite action here whose shell branches. Three repos adopt it on the same v1
   # move, so a wrong arg build would break all three at once.

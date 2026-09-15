@@ -276,9 +276,22 @@ piped to kubeconform, optional schema and README drift checks.
 
 ### `actions/validate-renovate-config`
 
+Pinned `renovate-config-validator --strict`. On `pull_request` and `push` it first diffs the
+changed files and skips the validator (the step, not the job, so a required `renovate-config`
+check still reports green) unless a config file changed. Every other event validates.
+
 ```yaml
 - uses: yama6a/gha/.github/actions/validate-renovate-config@v2
+  # with:
+  #   config-file: renovate.json5   # default auto-discovers, see below
+  #   extra-paths: |                # globs that also trigger the validation
+  #     .github/renovate/**
 ```
+
+| input | default |
+|---|---|
+| `config-file` | none; validator auto-discovery. The change filter then watches `renovate.json{,5}`, `.github/renovate.json{,5}`, `.gitlab/renovate.json{,5}` and `.renovaterc{,.json,.json5}`, not `package.json` |
+| `extra-paths` | none; one glob per line |
 
 ## Scripts
 
