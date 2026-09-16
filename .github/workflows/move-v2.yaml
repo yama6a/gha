@@ -1,0 +1,25 @@
+# Consumers pin yama6a/gha@v2, so main only reaches them once the tag moves.
+name: move-v2
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: move-v2
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  tag:
+    runs-on: ubuntu-24.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: move v2 to main
+        run: |
+          set -euo pipefail
+          git tag -f v2
+          git push --force origin refs/tags/v2
