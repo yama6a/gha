@@ -152,13 +152,14 @@ above. Needs a `DEPLOY_TOKEN` secret with write access to the target repo.
 
 ### `renovate.yaml`
 
-Self-hosted Renovate with a cross-run cache. The caller owns the triggers.
+Self-hosted Renovate with a cross-run cache, then a Copilot BC check on every open PR labelled
+`dep-major` whose head has no verdict yet. The caller is `templates/renovate.yaml`, applied by
+`scripts/rollout-renovate-caller.sh`.
 
 ```yaml
 on:
   schedule:
-    - cron: "13 5 * * *"  # opens PRs
-    - cron: "43 5 * * *"  # merges the ones whose CI went green
+    - cron: "13 5 * * *"
   workflow_dispatch:
     inputs:
       logLevel: { default: info, type: choice, options: [info, debug] }
@@ -167,6 +168,9 @@ on:
 jobs:
   renovate:
     uses: yama6a/gha/.github/workflows/renovate.yaml@v2
+    permissions:
+      contents: read
+      copilot-requests: write
     with:
       log-level: ${{ inputs.logLevel || 'info' }}
       dry-run: ${{ inputs.dryRun || false }}
@@ -175,13 +179,21 @@ jobs:
       RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
 ```
 
-`RENOVATE_TOKEN` is a PAT: `GITHUB_TOKEN` cannot open PRs that trigger workflows.
+`RENOVATE_TOKEN` is a PAT: `GITHUB_TOKEN` cannot open PRs that trigger workflows, and a merge it
+performs triggers no push workflows either. Copilot CLI is the one thing on `GITHUB_TOKEN`, which
+is what `copilot-requests: write` is for; the credits bill to the repo owner's Copilot seat.
+
+The BC check (`actions/renovate-bc-check`) asks Copilot CLI for silent behavior changes between
+the two versions, ignoring what the compiler catches. The review lands as a PR comment with one of
+the labels `bc-safe`, `bc-breaking`, `bc-unknown`. `bc-safe` arms auto-merge; the other two leave
+the PR for a human. A verdict is tied to the PR head, so a rebase gets a fresh check and an
+unchanged PR is never re-billed.
 
 ## Renovate presets
 
 | preset | extends | contents |
 |---|---|---|
-| `default.json5` | `github>yama6a/gha:default.json5` | `config:recommended`, dashboard, digest pinning, grouped auto-merged non-majors, auto-merged Actions majors |
+| `default.json5` | `github>yama6a/gha:default.json5` | `config:recommended`, dashboard, digest pinning, grouped non-majors on native auto-merge, majors labelled `dep-major` and never auto-merged |
 | `go.json5` | `github>yama6a/gha:go.json5` | `gomodTidy`, import-path rewrites, `go` directive bumps, strict constraints |
 | `node.json5` | `github>yama6a/gha:node.json5` | vite, eslint and node major groups, typescript below 7, `engines` ignored |
 
@@ -306,7 +318,16 @@ scripts/repo-settings.sh             # apply, idempotent
 scripts/repo-settings.sh --verify    # intended vs actual, exit 1 on mismatch
 ```
 
+### `scripts/rollout-renovate-caller.sh`
+
+Renders `templates/renovate.yaml` per repo from the table at the top of the script and, where the
+repo's `.github/workflows/renovate.yaml` differs, opens an auto-merged PR with the rendered file.
+Same flags as `repo-settings.sh`.
+
 ## Templates
 
 `templates/Makefile.go`: the Go Makefile every Go repo copies. `make lint` fetches the canonical
 lint config and merges `.golangci.local.yaml` the same way CI does.
+
+`templates/renovate.yaml`: the Renovate caller every repo runs. `__ALLOWED_COMMANDS__` is the line
+the rollout script fills in or drops.

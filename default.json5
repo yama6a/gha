@@ -14,10 +14,10 @@
   "prHourlyLimit": 0, // no hourly throttle
   "dependencyDashboardTitle": "Renovate dependency dashboard",
 
-  // Automerge through Renovate's own API call, not GitHub's native auto-merge. Renovate waits for the
-  // branch status either way, which is the only gate in repos without required checks. The merge
-  // therefore lands on a LATER run once CI is green, which is why the workflow cron runs twice a night, 30 min apart.
-  "platformAutomerge": false,
+  // GitHub's native auto-merge, armed when the PR is opened. GitHub merges once the required checks
+  // are green, so one nightly run is enough. Every repo has required checks (scripts/repo-settings.sh);
+  // without them GitHub would merge a PR whose tests failed.
+  "platformAutomerge": true,
 
   "packageRules": [
     {
@@ -27,15 +27,11 @@
       "automerge": true
     },
     {
-      // Routine action refreshes arrive as `digest` and ride the group above. A major moves the tag
-      // comment too, so it lands here instead: its own PR, still automerged.
-      // WARNING: PR CI only exercises ci.yaml. A major bump to an action used solely in a build,
-      // release or renovate workflow merges without ever having run, and surfaces at the next deploy.
-      "description": "github action majors: their own auto-merged PR",
-      "matchManagers": ["github-actions"],
+      // The label is what renovate.yaml's BC check picks up; a SAFE verdict arms auto-merge there.
+      "description": "majors: their own PR, labelled for the BC check, never automerged",
       "matchUpdateTypes": ["major"],
-      "groupName": "github actions (major)",
-      "automerge": true
+      "addLabels": ["dep-major"],
+      "automerge": false
     },
     {
       // So a moving tag cannot swap an action's code under us.

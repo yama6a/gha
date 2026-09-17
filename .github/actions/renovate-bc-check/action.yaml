@@ -1,0 +1,110 @@
+name: Renovate BC check
+description: Asks Copilot CLI whether a major dependency bump changes behavior this repo relies on, posts the review, and arms auto-merge on a SAFE verdict.
+inputs:
+  pr:
+    description: Pull request number, checked out at its head in the workspace
+    required: true
+  token:
+    description: PAT for the comment, the labels and the merge. GITHUB_TOKEN would perform a merge that triggers no push workflows.
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Install Copilot CLI
+      shell: bash
+      env:
+        COPILOT_VERSION: 1.0.85
+      run: |
+        set -euo pipefail
+        npm install -g "@github/copilot@$COPILOT_VERSION"
+
+    - name: Review the bump
+      id: review
+      shell: bash
+      env:
+        PR: ${{ inputs.pr }}
+        GH_TOKEN: ${{ inputs.token }}
+        GITHUB_TOKEN: ${{ github.token }}  # what Copilot CLI authenticates with; gh prefers GH_TOKEN above
+      run: |
+        set -euo pipefail
+        gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body \
+          --jq '"# " + .title + "\n\n" + .body' > /tmp/pr-body.md
+        nonce=$(openssl rand -hex 8)
+        echo "nonce=$nonce" >> "$GITHUB_OUTPUT"
+
+        # The nonce makes the verdict line unforgeable: Copilot reads upstream changelogs, which are
+        # text nobody here controls.
+        prompt=$(cat <<PROMPT
+        This pull request bumps a dependency. The PR title and Renovate's release notes are in
+        /tmp/pr-body.md. The diff is \`gh pr diff $PR --repo $GITHUB_REPOSITORY\`. The repository is
+        checked out at the PR head in the current directory.
+
+        Read the upstream release notes and changelog between the old and the new version, and the
+        diff between those two tags on GitHub, using gh.
+
+        Ignore anything that breaks the build: removed functions, changed signatures, changed types,
+        new import paths. CI catches those.
+
+        Report only silent behavior changes, things that still compile but act differently:
+        - changed default values (timeouts, retries, limits, sizes)
+        - changed error or retry semantics
+        - stricter or looser validation
+        - changed serialization, encoding, output or log format
+        - removed implicit fallbacks
+        - changed exit codes
+        - dropped platform or runtime support
+
+        For each one, find where this repository uses it and quote file and line. If this repository
+        does not use it, say so in one line.
+
+        Your last line must be exactly one of the three below, with nothing after it:
+        VERDICT-$nonce: SAFE
+        VERDICT-$nonce: BREAKING
+        VERDICT-$nonce: UNKNOWN
+
+        SAFE means you read the upstream changes and none affects this repository. BREAKING means one
+        does. UNKNOWN means you could not read the upstream changes. Never answer SAFE because you
+        found nothing; if you could not read the upstream changes, answer UNKNOWN.
+        PROMPT
+        )
+
+        # A crashed or timed-out Copilot is an UNKNOWN, not a failed job: the PR stays open either way.
+        copilot -p "$prompt" -s --no-ask-user \
+          --allow-tool='shell(gh:*)' --allow-tool='shell(git:*)' > /tmp/review.md \
+          || echo "::warning::copilot exited $? on PR #$PR"
+
+    - name: Record the verdict
+      shell: bash
+      env:
+        PR: ${{ inputs.pr }}
+        NONCE: ${{ steps.review.outputs.nonce }}
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        set -euo pipefail
+        last=$(grep -v '^[[:space:]]*$' /tmp/review.md | tail -n1 || true)
+        case $last in
+          "VERDICT-$NONCE: SAFE") verdict=SAFE ;;
+          "VERDICT-$NONCE: BREAKING") verdict=BREAKING ;;
+          *) verdict=UNKNOWN ;;
+        esac
+        head=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq .headRefOid)
+
+        {
+          echo "<!-- renovate-bc-check head=$head verdict=$verdict -->"
+          echo "## BC check: $verdict"
+          echo
+          head -c 60000 /tmp/review.md
+        } > /tmp/comment.md
+        gh pr comment "$PR" --repo "$GITHUB_REPOSITORY" --body-file /tmp/comment.md
+
+        for old in bc-safe bc-breaking bc-unknown; do
+          gh api -X DELETE "repos/$GITHUB_REPOSITORY/issues/$PR/labels/$old" > /dev/null 2>&1 || true
+        done
+        # The issues endpoint creates a label that does not exist yet; `gh pr edit --add-label` does not.
+        gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PR/labels" \
+          -f "labels[]=bc-$(tr '[:upper:]' '[:lower:]' <<< "$verdict")" > /dev/null
+
+        echo "PR #$PR: $verdict"
+        if [ "$verdict" = SAFE ]; then
+          gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --squash --auto
+        fi

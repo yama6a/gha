@@ -3,13 +3,13 @@
   // the API from the default branch, so it resolves independently of the checkout.
   // Which manager owns what:
   //   github-actions  the action pins in .github/workflows/*.yaml and .github/actions/*/action.yaml
-  //   regex           the renovate npm pin behind validate-renovate-config
+  //   regex           the renovate npm pin behind validate-renovate-config, and the Copilot CLI
+  //                   npm pin behind renovate-bc-check
   // Cadence is the cron in .github/workflows/renovate.yaml, not an internal `schedule`, so a manual
   // workflow_dispatch works too.
   //
-  // WARNING: an automerged bump here changes what every consuming repo runs, because they reference
-  // this repo's reusable workflows by the floating @v1 tag. The tag has to be moved by hand for a
-  // merged bump to actually reach them, which is the gate.
+  // WARNING: an automerged bump here reaches every consuming repo as soon as move-v2.yaml moves the
+  // tag, which is on every push to main.
   $schema: "https://docs.renovatebot.com/renovate-schema.json",
   extends: ["github>yama6a/gha:default.json5"],
   customManagers: [
@@ -18,6 +18,13 @@
       managerFilePatterns: [".github/actions/validate-renovate-config/action.yaml"],
       matchStrings: ["RENOVATE_VERSION: (?<currentValue>\\S+)"],
       depNameTemplate: "renovate",
+      datasourceTemplate: "npm",
+    },
+    {
+      customType: "regex",
+      managerFilePatterns: [".github/actions/renovate-bc-check/action.yaml"],
+      matchStrings: ["COPILOT_VERSION: (?<currentValue>\\S+)"],
+      depNameTemplate: "@github/copilot",
       datasourceTemplate: "npm",
     },
   ],

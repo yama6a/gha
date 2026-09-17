@@ -1,9 +1,9 @@
-# Runs Renovate against THIS repo. renovate.yaml next to it is the reusable workflow every other
-# repo calls; this is the caller that points it back here, so gha's own action pins stay fresh.
-name: Renovate (self)
+# Self-hosted Renovate. Reads /renovate.json5 from the cloned repo automatically.
+name: Renovate
 
 on:
   schedule:
+    # Opens PRs. Non-majors arm GitHub's auto-merge and land on green; majors get a Copilot BC check.
     - cron: "13 5 * * *"
   workflow_dispatch:
     inputs:
@@ -19,13 +19,13 @@ on:
 
 jobs:
   renovate:
-    # Local path, not @v1: a self-reference by tag would run whatever v1 points at, not this branch.
-    uses: ./.github/workflows/renovate.yaml
+    uses: yama6a/gha/.github/workflows/renovate.yaml@v2
     permissions:
       contents: read  # Renovate acts through RENOVATE_TOKEN, not GITHUB_TOKEN
       copilot-requests: write  # the BC check's Copilot CLI is the one thing on GITHUB_TOKEN
-    secrets:
-      RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
     with:
       log-level: ${{ inputs.logLevel || 'info' }}
       dry-run: ${{ inputs.dryRun || false }}
+      __ALLOWED_COMMANDS__
+    secrets:
+      RENOVATE_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
