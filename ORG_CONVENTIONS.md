@@ -120,8 +120,10 @@ them report on a PR, so the PR sits pending forever.
 
 ## Renovate
 
-- nightly through `renovate.yaml@v2`: 05:13 UTC opens PRs, 05:43 UTC merges the ones that went
-  green.
-- non-major updates are grouped into one PR and auto-merged; GitHub Actions majors auto-merged;
+- nightly through `renovate.yaml@v2` at 05:13 UTC, caller from `templates/renovate.yaml`, applied
+  by `scripts/rollout-renovate-caller.sh`.
+- non-major updates are grouped into one PR that arms GitHub's auto-merge and lands on green;
   everything digest-pinned.
+- every major gets its own PR and the `dep-major` label. The same run hands it to the Copilot BC
+  check; `bc-safe` arms auto-merge, `bc-breaking` and `bc-unknown` wait for a human.
 - per-repo `packageRules` cover only what is specific to that repo.
