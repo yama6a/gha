@@ -21,4 +21,5 @@ runs:
       run: |
         curl -fsSL "https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_$(dpkg --print-architecture).tar.gz" \
           | tar xz actionlint
-        ./actionlint -color
+        # No actionlint release knows the copilot-requests scope yet; consumers grant it to renovate.yaml.
+        ./actionlint -color -ignore 'unknown permission scope "copilot-requests"'

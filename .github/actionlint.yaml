@@ -16,5 +16,3 @@ paths:
     ignore:
       # actionlint 1.7.x has not caught up with the job context's workflow identity properties
       - 'property "workflow_(sha|repository)" is not defined'
-      # nor with the copilot-requests scope Copilot CLI needs
-      - 'unknown permission scope "copilot-requests"'
