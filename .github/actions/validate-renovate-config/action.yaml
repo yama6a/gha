@@ -52,7 +52,7 @@ runs:
       if: steps.filter.outcome == 'skipped' || steps.filter.outputs.config == 'true'
       shell: bash
       env:
-        RENOVATE_VERSION: 44.93.7
+        RENOVATE_VERSION: 44.96.1
         CONFIG_FILE: ${{ inputs.config-file }}
       run: |
         set -euo pipefail
