@@ -19,6 +19,15 @@
       "matchManagers": ["gomod"],
       "matchDepTypes": ["indirect"],
       "enabled": true
+    },
+    {
+      // A Go major is a new import path. Only the direct importer can move to it, so a major on an
+      // indirect dep is undone by go mod tidy and Renovate ships its own go.mod edit untidied.
+      "description": "no majors on indirect go deps",
+      "matchManagers": ["gomod"],
+      "matchDepTypes": ["indirect"],
+      "matchUpdateTypes": ["major"],
+      "enabled": false
     }
   ]
 }
