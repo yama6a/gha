@@ -48,6 +48,12 @@ runs:
         token: ''  # git diff instead of the PR files API, which needs pull-requests: read from every caller
         filters: ${{ steps.paths.outputs.filters }}
 
+    - name: Pin Node for npx
+      if: steps.filter.outcome == 'skipped' || steps.filter.outputs.config == 'true'
+      uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+      with:
+        node-version: 24  # renovate's engines field wants ^24; the runner image default moves under us otherwise
+
     - name: Validate renovate config
       if: steps.filter.outcome == 'skipped' || steps.filter.outputs.config == 'true'
       shell: bash
