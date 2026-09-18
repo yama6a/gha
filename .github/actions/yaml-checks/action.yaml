@@ -22,4 +22,7 @@ runs:
         curl -fsSL "https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_$(dpkg --print-architecture).tar.gz" \
           | tar xz actionlint
         # No actionlint release knows the copilot-requests scope yet; consumers grant it to renovate.yaml.
-        ./actionlint -color -ignore 'unknown permission scope "copilot-requests"'
+        # Its runner label list is hardcoded and lags GitHub by months, so runs-on labels go unchecked.
+        ./actionlint -color \
+          -ignore 'unknown permission scope "copilot-requests"' \
+          -ignore 'label ".+" is unknown'
