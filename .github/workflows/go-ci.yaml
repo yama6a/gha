@@ -85,7 +85,11 @@ jobs:
         run: go vet ./...
 
       # setup-go restores GOCACHE, so without -count=1 go test serves cached results.
+      # The race runtime sleeps 1s at exit of every test binary to catch races in goroutines
+      # still running; with 60 packages that is a minute of CI, so it is off here.
       - name: Run go test
+        env:
+          GORACE: atexit_sleep_ms=0
         run: go test ./... -race -count=1 -coverprofile=cover.out
 
       - name: Coverage summary
