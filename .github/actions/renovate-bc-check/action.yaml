@@ -24,7 +24,8 @@ runs:
       env:
         PR: ${{ inputs.pr }}
         GH_TOKEN: ${{ inputs.token }}
-        GITHUB_TOKEN: ${{ github.token }}  # what Copilot CLI authenticates with; gh prefers GH_TOKEN above
+        # Copilot CLI reads COPILOT_GITHUB_TOKEN before GH_TOKEN and rejects the classic PAT in GH_TOKEN.
+        COPILOT_GITHUB_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
         gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body \
