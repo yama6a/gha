@@ -12,6 +12,7 @@ codarr                      | main   |
 longhorn-replica-affinity   | main   |
 offgrid                     | main   | chart-lock
 offgrid-private             | main   | chart-lock
+pgsandbox                   | main   |
 pi5-k8s-sample-app          | main   |
 pontiki-website             | main   |
 praxis                      | main   |
