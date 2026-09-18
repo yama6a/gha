@@ -99,8 +99,18 @@ jobs:
       - name: Cross-compile
         run: |
           set -euo pipefail
+          pids=()
+          for target in linux/amd64 linux/arm64; do
+            CGO_ENABLED=0 GOOS="${target%%/*}" GOARCH="${target##*/}" go build ./... > "/tmp/build-${target##*/}.log" 2>&1 &
+            pids+=("$!")
+          done
+          rc=0
+          i=0
           for target in linux/amd64 linux/arm64; do
             echo "::group::build $target"
-            CGO_ENABLED=0 GOOS="${target%%/*}" GOARCH="${target##*/}" go build ./...
+            wait "${pids[$i]}" || rc=1
+            cat "/tmp/build-${target##*/}.log"
             echo "::endgroup::"
+            i=$((i + 1))
           done
+          exit "$rc"
