@@ -43,20 +43,23 @@ jobs:
           fi
 
       # job.workflow_sha is this reusable workflow's own commit, so a caller pinned
-      # to @v2 gets the v2 config and never main's.
-      - name: Fetch the canonical lint config
+      # to @v2 gets the v2 files and never main's.
+      - name: Fetch the canonical lint config and the vuln script
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: ${{ job.workflow_repository }}
           ref: ${{ job.workflow_sha }}
           path: .gha
-          sparse-checkout: .golangci.yaml
-          sparse-checkout-cone-mode: false  # cone mode selects directories, not one file
+          sparse-checkout: |
+            .golangci.yaml
+            scripts/govulncheck.sh
+          sparse-checkout-cone-mode: false  # cone mode selects directories, not files
 
       # `*+` appends arrays, so .golangci.local.yaml lists only its additions.
       - name: Build the lint config
         run: |
           set -euo pipefail
+          cp .gha/scripts/govulncheck.sh /tmp/govulncheck.sh
           if [ -f .golangci.yaml ] || [ -f .golangci.yml ]; then
             echo "::error::delete this repo's .golangci.yaml; yama6a/gha holds the only one. Repo-specific additions go in .golangci.local.yaml"
             exit 1
@@ -92,7 +95,7 @@ jobs:
         run: go tool cover -func=cover.out | tail -1
 
       - name: Run govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+        run: bash /tmp/govulncheck.sh
 
       # Every Go repo here ships a multi-arch image, and CI runs on one arch, so a
       # compile error on the other would first surface at release time.

@@ -26,6 +26,11 @@ additions go in `.golangci.local.yaml`, merged on top with
 holds only its additions). `templates/Makefile.go` runs the same merge locally so `make lint` and
 CI agree.
 
+govulncheck fails on a vulnerable symbol the code calls. When no fixed release exists, list the ID
+in `.govulncheck-ignore` at the repo root, one per line, a trailing `#` comment allowed. Once the
+advisory gains a fixed version the ignored ID fails the check again, until the module is updated
+and the line dropped. `templates/Makefile.go` runs the same `scripts/govulncheck.sh` for `make vuln`.
+
 ### `node-ci.yaml`
 
 `npm ci`, then the scripts `generate` (followed by `git diff --exit-code`), `lint`,
