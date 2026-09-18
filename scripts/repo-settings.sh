@@ -14,6 +14,7 @@ gha                         | main   | false | public  | yaml,renovate-presets,k
 longhorn-replica-affinity   | main   | false | public  | release label,go / go,chart,yaml,renovate-config
 offgrid                     | main   | false | public  | helm,shell,yaml,renovate-config,chart-tests
 offgrid-private             | main   | true  | private | helm,shell,yaml,renovate-config,chart-tests
+pgsandbox                   | main   | false | public  | go / go,renovate-config
 pi5-k8s-sample-app          | main   | false | public  | go / go,renovate-config
 pontiki-website             | main   | false | private | node / node,links,renovate-config
 praxis                      | main   | false | public  | node / node,renovate-config

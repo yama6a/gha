@@ -55,6 +55,8 @@ them report on a PR, so the PR sits pending forever.
 
 - Makefile: a copy of `templates/Makefile.go` from gha, repo extras added below it; `ci` runs
   the same checks as go-ci.
+- a library releases through `go-release.yaml@v2`: a semver tag on every merge to main, bumped
+  by a `release:major` or `release:minor` label on the merged PR, patch otherwise.
 
 ## Frontend
 

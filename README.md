@@ -138,6 +138,33 @@ Same result, one native runner per architecture, for a build that cannot run und
 caller permissions. Inputs: `dockerfile`, `context`, `build-args`, `version`, and `platforms` as a
 JSON array of `{platform, runner}` (default amd64 on `ubuntu-latest`, arm64 on `ubuntu-24.04-arm`).
 
+### `go-release.yaml`
+
+Semver tag and GitHub release for a Go library on every merge to main. The bump comes from the
+merged PR's labels: `release:major`, `release:minor`, else patch. A HEAD that already carries a
+`v*` tag is skipped, so a rerun is safe. Outputs `version`.
+
+```yaml
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  go-release:
+    uses: yama6a/gha/.github/workflows/go-release.yaml@v2
+```
+
+| input | default |
+|---|---|
+| `initial-version` | `v0.1.0`; the tag created when the repo has none |
+
 ### `deploy-gitops.yaml`
 
 Bumps an image tag in a GitOps repo's `values.yaml`, opens a PR, arms auto-merge. Caller example
