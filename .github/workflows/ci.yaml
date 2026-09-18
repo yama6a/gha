@@ -12,13 +12,13 @@ permissions:
 
 jobs:
   yaml:
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       - uses: ./.github/actions/yaml-checks
 
   renovate-presets:
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
       # A broken preset here silently falls every consuming repo back to Renovate's defaults.
@@ -30,7 +30,7 @@ jobs:
   # The only composite action here whose shell branches. Three repos adopt it on the same v1
   # move, so a wrong arg build would break all three at once.
   kubeconform:
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
@@ -59,7 +59,7 @@ jobs:
           kubeconform $KUBECONFORM_ARGS < .github/testdata/kubeconform/valid.yaml
 
   helm-chart-checks:
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
@@ -92,7 +92,7 @@ jobs:
   # Both binaries are pinned rather than taken from the runner image, so the fixtures also have
   # to prove the pinned ones are what ran.
   shell-checks:
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
@@ -121,7 +121,7 @@ jobs:
           fi
 
   hadolint:
-    runs-on: ubuntu-24.04-arm
+    runs-on: ubuntu-26.04-arm
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
