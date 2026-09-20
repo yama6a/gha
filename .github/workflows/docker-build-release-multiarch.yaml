@@ -26,6 +26,10 @@ on:
         description: Release version to use verbatim; empty computes the next integer from the latest release
         type: string
         default: ''
+      trivy-skip-dirs:
+        description: Comma-separated image paths the scanner skips entirely, for directories whose contents are already public
+        type: string
+        default: ''
     outputs:
       version:
         description: The release version that was built and pushed
@@ -133,6 +137,7 @@ jobs:
           TRIVY_PLATFORM: ${{ matrix.platform }}
         with:
           image-ref: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
+          skip-dirs: ${{ inputs.trivy-skip-dirs }}
           format: table
           exit-code: '0'
           ignore-unfixed: true
