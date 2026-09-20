@@ -7,15 +7,37 @@ jobs:
   check:
     name: go  # a required-check context; the steps grow, this does not
     runs-on: ubuntu-26.04-arm
+    timeout-minutes: 30  # the cache trim below assumes the run finishes well inside 90 minutes
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
       - name: Set up Go
+        id: go
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
         with:
           go-version-file: go.mod
-          cache: true
+          cache: false  # its key has no restore-keys, so any go.mod change was a cold start
+
+      # ISO week in the key, so a repo whose go.sum never changes still refreshes GOCACHE weekly.
+      - name: Compute the cache week
+        id: week
+        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
+
+      # Literal paths: actions/cache runs no shell, and nothing in this job moves GOPATH or GOCACHE.
+      - name: Restore the Go caches
+        id: gocache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: go-v1-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('**/go.sum') }}-${{ steps.week.outputs.week }}
+          # Bump go-v1 to drop the old module versions a prefix match keeps carrying forward.
+          restore-keys: |
+            go-v1-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('**/go.sum') }}-
+            go-v1-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-
+            go-v1-${{ runner.arch }}-
 
       # A stale go.mod/go.sum still builds, so nothing else here would catch it.
       # Runs before go generate, which can edit go.mod through `go run -mod=mod`.
@@ -78,6 +100,7 @@ jobs:
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a  # v9.3.0
         with:
           args: --timeout 5m -c /tmp/golangci.yaml ./...
+          skip-save-cache: ${{ github.event_name == 'pull_request' }}  # a PR-scoped save is readable by that PR alone
 
       # `run` does not enforce the formatters, so check them separately. Without
       # -c this only runs gofmt, and gofumpt and goimports go unchecked.
@@ -88,7 +111,7 @@ jobs:
       - name: Run go vet
         run: go vet ./...
 
-      # setup-go restores GOCACHE, so without -count=1 go test serves cached results.
+      # The restore step brings back GOCACHE, so without -count=1 go test serves cached results.
       # The race runtime sleeps 1s at exit of every test binary to catch races in goroutines
       # still running; with 60 packages that is a minute of CI, so it is off here.
       - name: Run go test
@@ -124,3 +147,18 @@ jobs:
             i=$((i + 1))
           done
           exit "$rc"
+
+      # Go bumps an entry's mtime on use, so this keeps only what this run touched.
+      - name: Trim the Go build cache to what this run used
+        if: github.event_name != 'pull_request' && steps.gocache.outputs.cache-hit != 'true'
+        run: find "$(go env GOCACHE)" -type f -mmin +90 -delete
+
+      # Never from a pull_request: that scope is readable by the one PR and nothing after it.
+      - name: Save the Go caches
+        if: github.event_name != 'pull_request' && steps.gocache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ steps.gocache.outputs.cache-primary-key }}
