@@ -118,9 +118,6 @@ jobs:
           provenance: mode=max
           sbom: true
           outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
-          # Per-platform scope: one shared cache would have the two legs evicting each other.
-          cache-from: type=gha,scope=${{ matrix.platform }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.platform }}
 
       # Each arch is scanned on its own native runner, before merge joins the digests. Report-only
       # until every repo has a week of output to review and a .trivyignore for whatever it decides

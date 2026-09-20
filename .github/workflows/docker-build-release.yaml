@@ -128,8 +128,6 @@ jobs:
           provenance: mode=max
           sbom: true
           tags: ${{ env.IMAGE }}:${{ env.CI_TAG }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
 
       # Report-only until every repo has a week of output to review and a .trivyignore for whatever
       # it decides to carry; enforcing is then a one-line change to exit-code.
