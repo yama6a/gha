@@ -1,5 +1,6 @@
 GO_LINT_CONFIG     ?= .build/golangci.yaml
 CANONICAL_LINT_URL := https://raw.githubusercontent.com/yama6a/gha/v2/.golangci.yaml
+GOVULNCHECK_URL    := https://raw.githubusercontent.com/yama6a/gha/v2/scripts/govulncheck.sh
 IMAGE              ?= ghcr.io/yama6a/myapp
 
 .PHONY: lint-config generate fmt fmt-check lint vet test cover vuln tidy tidy-check \
@@ -37,8 +38,11 @@ cover:
 	go test ./... -coverprofile=cover.out -covermode=atomic
 	go tool cover -func=cover.out | tail -1
 
+# The same wrapper CI runs, so a .govulncheck-ignore entry counts in both places.
 vuln:
-	go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+	mkdir -p .build
+	curl -fsSL $(GOVULNCHECK_URL) -o .build/govulncheck.sh
+	bash .build/govulncheck.sh
 
 tidy:
 	go mod tidy

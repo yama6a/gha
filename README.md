@@ -20,6 +20,18 @@ jobs:
     uses: yama6a/gha/.github/workflows/go-ci.yaml@v2
 ```
 
+govulncheck runs through `scripts/govulncheck.sh`, which fails on the same findings plain
+govulncheck exits 3 on: a vulnerability your code actually calls. A caller can allowlist an id in
+`.govulncheck-ignore`, one OSV id per line with the reason after a `#`:
+
+```
+GO-2026-6452  # excelize: the OSV record has no fixed version, but v2.11.0 carries the fix
+```
+
+Use it only when no released version clears the finding, which happens when an advisory's OSV
+record has no `fixed` event. An id listed there that govulncheck no longer reports produces a
+warning, so the entries get cleaned up.
+
 The caller must not carry a `.golangci.yaml`; the workflow fails if it finds one. Repo-specific
 additions go in `.golangci.local.yaml`, merged on top with
 `yq eval-all '. as $item ireduce ({}; . *+ $item)'` (`*+` appends to lists, so the local file
