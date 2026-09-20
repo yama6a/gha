@@ -69,8 +69,9 @@ jobs:
         with:
           node-version-file: ${{ inputs.working-directory }}/.nvmrc
 
-      - name: Cache the npm store
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+      - name: Restore the npm store
+        id: npm-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.npm
           key: npm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles(format('{0}/package-lock.json', inputs.working-directory)) }}
@@ -79,6 +80,14 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      # Never from a pull_request: that scope is readable by the one PR and nothing after it.
+      - name: Save the npm store
+        if: github.event_name != 'pull_request' && steps.npm-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.npm
+          key: ${{ steps.npm-cache.outputs.cache-primary-key }}
 
       - name: Set build env
         if: inputs.build-env != ''
@@ -116,8 +125,9 @@ jobs:
         with:
           node-version-file: ${{ inputs.working-directory }}/.nvmrc
 
-      - name: Cache the npm store
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+      # Restore only: a shard never saves, four of them uploading the same key was pure overhead.
+      - name: Restore the npm store
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.npm
           key: npm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles(format('{0}/package-lock.json', inputs.working-directory)) }}
@@ -145,9 +155,9 @@ jobs:
         id: pw-version
         run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
 
-      - name: Cache the Playwright browsers
+      - name: Restore the Playwright browsers
         id: pw-cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           # No restore-keys: a partial match hands you the wrong browser build.
@@ -212,8 +222,9 @@ jobs:
         with:
           node-version-file: ${{ inputs.working-directory }}/.nvmrc
 
-      - name: Cache the npm store
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+      - name: Restore the npm store
+        id: npm-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.npm
           key: npm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles(format('{0}/package-lock.json', inputs.working-directory)) }}
@@ -223,13 +234,21 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Never from a pull_request: that scope is readable by the one PR and nothing after it.
+      - name: Save the npm store
+        if: github.event_name != 'pull_request' && steps.npm-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.npm
+          key: ${{ steps.npm-cache.outputs.cache-primary-key }}
+
       - name: Resolve the Playwright version
         id: pw-version
         run: echo "version=$(node -p "require('@playwright/test/package.json').version")" >> "$GITHUB_OUTPUT"
 
-      - name: Cache the Playwright browsers
+      - name: Restore the Playwright browsers
         id: pw-cache
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.cache/ms-playwright
           key: pw-${{ runner.os }}-${{ runner.arch }}-${{ steps.pw-version.outputs.version }}
@@ -237,3 +256,10 @@ jobs:
       - name: Download the browsers
         if: steps.pw-cache.outputs.cache-hit != 'true'
         run: npx playwright install ${{ inputs.browser }}
+
+      - name: Save the Playwright browsers
+        if: github.event_name != 'pull_request' && steps.pw-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.cache/ms-playwright
+          key: ${{ steps.pw-cache.outputs.cache-primary-key }}

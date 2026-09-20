@@ -90,9 +90,10 @@ jobs:
         with:
           node-version-file: .nvmrc
 
-      - name: Cache the npm store
+      - name: Restore the npm store
         if: inputs.build-command != ''
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        id: npm-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.npm
           key: npm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}
@@ -104,6 +105,14 @@ jobs:
       - name: Run build command
         if: inputs.build-command != ''
         run: ${{ inputs.build-command }}
+
+      # Same guard as the restore: its outputs are empty when it was skipped.
+      - name: Save the npm store
+        if: inputs.build-command != '' && steps.npm-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.npm
+          key: ${{ steps.npm-cache.outputs.cache-primary-key }}
 
       - name: Log in to GHCR
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4.6.0

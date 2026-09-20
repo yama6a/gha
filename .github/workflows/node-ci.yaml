@@ -38,8 +38,9 @@ jobs:
         with:
           node-version-file: ${{ inputs.working-directory }}/.nvmrc
 
-      - name: Cache the npm store
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+      - name: Restore the npm store
+        id: npm-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.npm
           key: npm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles(format('{0}/package-lock.json', inputs.working-directory)) }}
@@ -48,6 +49,14 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      # Never from a pull_request: that scope is readable by the one PR and nothing after it.
+      - name: Save the npm store
+        if: github.event_name != 'pull_request' && steps.npm-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.npm
+          key: ${{ steps.npm-cache.outputs.cache-primary-key }}
 
       - name: Generate
         run: npm run generate
