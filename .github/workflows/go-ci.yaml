@@ -19,11 +19,6 @@ jobs:
           go-version-file: go.mod
           cache: false  # its key has no restore-keys, so any go.mod change was a cold start
 
-      # ISO week in the key, so a repo whose go.sum never changes still refreshes GOCACHE weekly.
-      - name: Compute the cache week
-        id: week
-        run: echo "week=$(date -u +%G-W%V)" >> "$GITHUB_OUTPUT"
-
       # Literal paths: actions/cache runs no shell, and nothing in this job moves GOPATH or GOCACHE.
       - name: Restore the Go caches
         id: gocache
@@ -32,10 +27,9 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
-          key: go-v1-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('**/go.sum') }}-${{ steps.week.outputs.week }}
+          key: go-v1-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('**/go.sum') }}
           # Bump go-v1 to drop the old module versions a prefix match keeps carrying forward.
           restore-keys: |
-            go-v1-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('**/go.sum') }}-
             go-v1-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-
             go-v1-${{ runner.arch }}-
 
