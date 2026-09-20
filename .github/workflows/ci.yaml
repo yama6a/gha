@@ -98,7 +98,7 @@ jobs:
 
       - uses: ./.github/actions/shell-checks
         with:
-          paths: .github/testdata/shell/clean.sh
+          paths: .github/testdata/shell/clean.sh scripts/*.sh
 
       - name: the pinned shellcheck is the one on PATH
         run: |

@@ -44,17 +44,20 @@ jobs:
 
       # job.workflow_sha is this reusable workflow's own commit, so a caller pinned
       # to @v2 gets the v2 config and never main's.
-      - name: Fetch the canonical lint config
+      - name: Fetch the canonical config and scripts
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: ${{ job.workflow_repository }}
           ref: ${{ job.workflow_sha }}
           path: .gha
-          sparse-checkout: .golangci.yaml
-          sparse-checkout-cone-mode: false  # cone mode selects directories, not one file
+          sparse-checkout: |
+            .golangci.yaml
+            scripts/govulncheck.sh
+          sparse-checkout-cone-mode: false  # cone mode selects directories, not single files
 
-      # `*+` appends arrays, so .golangci.local.yaml lists only its additions.
-      - name: Build the lint config
+      # `*+` appends arrays, so .golangci.local.yaml lists only its additions. .gha goes away
+      # here so the cross-compile and any later git diff never see it.
+      - name: Stage the lint config and scripts
         run: |
           set -euo pipefail
           if [ -f .golangci.yaml ] || [ -f .golangci.yml ]; then
@@ -68,6 +71,7 @@ jobs:
           else
             cp .gha/.golangci.yaml /tmp/golangci.yaml
           fi
+          install -m 0755 .gha/scripts/govulncheck.sh /tmp/govulncheck.sh
           rm -rf .gha
 
       - name: Run golangci-lint
@@ -95,8 +99,10 @@ jobs:
       - name: Coverage summary
         run: go tool cover -func=cover.out | tail -1
 
+      # Wrapped rather than called directly so a repo can allowlist an OSV id in
+      # .govulncheck-ignore; the script explains when that is the only way out.
       - name: Run govulncheck
-        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
+        run: /tmp/govulncheck.sh
 
       # Every Go repo here ships a multi-arch image, and CI runs on one arch, so a
       # compile error on the other would first surface at release time.

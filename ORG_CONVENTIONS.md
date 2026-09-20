@@ -46,6 +46,8 @@ them report on a PR, so the PR sits pending forever.
 - go-ci runs: `go mod tidy` drift, `go generate` drift, fmt, golangci-lint with the canonical
   config, vet, `go test -race -count=1` with coverage, govulncheck, cross-compile amd64 and arm64.
 - no local `.golangci.yaml`. A repo-specific delta goes in `.golangci.local.yaml`, merged on top.
+- a govulncheck finding no released version can clear goes in `.govulncheck-ignore`, one OSV id
+  per line, reason after a `#`.
 - tool dependencies: Go 1.24 `tool` directives in `go.mod`. No `tools.go`.
 - logging: zap, typed fields. The logger is an unexported struct field or the last constructor
   param, never a package global. `zap.NewNop()` in tests.
