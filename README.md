@@ -13,6 +13,8 @@ workflow's job carries the same `name:`, so the context is `go / go`, `node / no
 
 No inputs. Tidy drift, generate drift, golangci-lint with the canonical `.golangci.yaml` from this
 repo, fmt, vet, `go test -race -count=1` with coverage, govulncheck, cross-compile amd64 and arm64.
+The module and build caches are restored on every run and saved only from runs that are not a
+`pull_request`, so keep the caller's `push: branches: [main]` trigger.
 
 ```yaml
 jobs:
