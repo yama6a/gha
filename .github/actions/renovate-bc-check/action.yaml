@@ -17,7 +17,7 @@ runs:
     - name: Install Copilot CLI
       shell: bash
       env:
-        COPILOT_VERSION: 1.0.86
+        COPILOT_VERSION: 1.0.87
       run: |
         set -euo pipefail
         npm install -g "@github/copilot@$COPILOT_VERSION"
