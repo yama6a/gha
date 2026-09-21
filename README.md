@@ -225,14 +225,22 @@ performs triggers no push workflows either. Copilot CLI is the one thing on `GIT
 is what `copilot-requests: write` is for; the credits bill to the repo owner's Copilot seat.
 
 The BC check (`actions/renovate-bc-check`) asks Copilot CLI for silent behavior changes, ignoring
-what the compiler catches: between the two versions for a `dep-major`, and between the old and the
-new package's inputs, outputs and defaults at the repo's call sites for a `dep-swap`. For each
-change it traces the upstream PR or issue behind it and checks whether the condition that triggers
-it (registry, platform, input value) exists in the repo; a change whose trigger is absent does not
-count. The review lands as a PR comment with one of the labels `bc-safe`, `bc-breaking`,
-`bc-unknown`. `bc-safe` arms auto-merge; the other two leave
-the PR for a human. A verdict is tied to the PR head, so a rebase gets a fresh check and an
-unchanged PR is never re-billed.
+what the compiler catches. For a `dep-major` it reads the tag diff first and the changelog second.
+For a `dep-swap` it resolves both packages to code and classifies the swap (rename, wrapper, fork,
+unrelated), which decides what gets diffed; a wrapper's own layer counts, not only the package it
+wraps. Either way Copilot lists every difference before judging any, then for each one traces the
+upstream PR or issue behind it and checks whether the triggering condition (registry, platform,
+input value) exists in the repo; a change whose trigger is absent does not count. The review lands
+as a PR comment with one of the labels `bc-safe`, `bc-breaking`, `bc-unknown`. `bc-safe` arms
+auto-merge; the other two leave the PR for a human. A verdict is tied to the PR head, so a rebase
+gets a fresh check and an unchanged PR is never re-billed.
+
+Prompt shape follows two published findings. Changelog-only review misses behavior changes that a
+source diff plus call-site check catches ([arXiv 2510.03480](https://arxiv.org/abs/2510.03480)),
+so the diff is primary. An agent that judges as it reads drops findings between reading and
+writing, so it must inventory first and keep the go/no-go rule in deterministic code
+([EdgeBit](https://edgebit.io/blog/automated-dependency-updates-with-ai/)); here that rule is the
+label, the nonce and required checks.
 
 ## Renovate presets
 
