@@ -39,25 +39,35 @@ runs:
 
         if jq -e 'any(.labels[].name; . == "dep-swap")' /tmp/pr.json > /dev/null; then
           task=$(cat <<TASK
-        This pull request replaces a dependency with a different package at the same version, so there
-        is no changelog between the two. The PR title and Renovate's notes are in /tmp/pr-body.md. The
-        diff is \`gh pr diff $PR --repo $GITHUB_REPOSITORY\` and shows every call site. The repository is
+        This pull request replaces a dependency with a different package, so there is no changelog
+        between the two. The PR title and Renovate's notes are in /tmp/pr-body.md. The diff is
+        \`gh pr diff $PR --repo $GITHUB_REPOSITORY\` and shows every call site. The repository is
         checked out at the PR head in the current directory.
 
-        Read the documentation of both packages using gh: the README, and for a GitHub action its
-        action.yml, at the versions named in the PR. Compare every input, output, default, required
-        permission and side effect this repository relies on in the old package against the new one.
+        Resolve both sides to concrete code using gh: repository and tag, image digest, or module
+        version. Then state which of these the replacement is, and why:
+        - same code under a new name or registry: prove the digest or commit matches, then there is
+          nothing to diff
+        - one side wraps the other, or both wrap a third package: list everything the outer layer
+          adds or changes (environment variables, extra steps, flags, injected defaults, pinned inner
+          version), and diff the inner version range the same way you would a version bump
+        - fork or successor: diff the API at the call sites and read the fork's changes since it
+          diverged
+        - unrelated package: compare behavior at every call site
+
+        Read both packages' source and documentation at the resolved versions, not only the README.
         TASK
         )
-          sources="both packages' documentation"
+          sources="both packages' source and documentation"
         else
           task=$(cat <<TASK
         This pull request bumps a dependency. The PR title and Renovate's release notes are in
         /tmp/pr-body.md. The diff is \`gh pr diff $PR --repo $GITHUB_REPOSITORY\`. The repository is
         checked out at the PR head in the current directory.
 
-        Read the upstream release notes and changelog between the old and the new version, and the
-        diff between those two tags on GitHub, using gh.
+        Read the diff between the two tags on GitHub using gh, then the release notes and changelog
+        for the same range. Where they disagree the diff wins; note anything the diff shows that the
+        notes omit.
         TASK
         )
           sources="the upstream changes"
@@ -81,7 +91,8 @@ runs:
         - dropped platform or runtime support
         - inputs or outputs that keep their name but mean something else
 
-        For each one:
+        First write a numbered list of every difference you found, one line each, including the ones
+        you expect to dismiss. Then evaluate each entry:
         1. Find where this repository uses it and quote file and line. If this repository does not
            use it, say so in one line and stop there.
         2. Find the upstream pull request or issue that introduced it, using gh, and state what
@@ -93,6 +104,8 @@ runs:
         A difference counts as affecting this repository only if the condition is present or you
         cannot tell. A difference whose condition is demonstrably absent does not, and the review
         must say why.
+
+        Write only the finished review. No narration of what you are fetching or how a command went.
 
         Your last line must be exactly one of the three below, with nothing after it:
         VERDICT-$nonce: SAFE
