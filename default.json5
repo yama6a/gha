@@ -34,6 +34,14 @@
       "automerge": false
     },
     {
+      // A replacement swaps the package for a different one at the same version, so there is no
+      // old-to-new changelog; the BC check compares the repo's usage against the new package instead.
+      "description": "replacements: their own PR, labelled for the BC check, never automerged",
+      "matchUpdateTypes": ["replacement"],
+      "addLabels": ["dep-swap"],
+      "automerge": false
+    },
+    {
       // So a moving tag cannot swap an action's code under us.
       "description": "pin github action refs to digests",
       "matchManagers": ["github-actions"],

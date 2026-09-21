@@ -1,5 +1,5 @@
 name: Renovate BC check
-description: Asks Copilot CLI whether a major dependency bump changes behavior this repo relies on, posts the review, and arms auto-merge on a SAFE verdict.
+description: Asks Copilot CLI whether a major dependency bump (dep-major) or a package replacement (dep-swap) changes behavior this repo relies on, posts the review, and arms auto-merge on a SAFE verdict.
 inputs:
   pr:
     description: Pull request number, checked out at its head in the workspace
@@ -32,23 +32,44 @@ runs:
         COPILOT_GITHUB_TOKEN: ${{ github.token }}
       run: |
         set -euo pipefail
-        gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body \
-          --jq '"# " + .title + "\n\n" + .body' > /tmp/pr-body.md
+        gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body,labels > /tmp/pr.json
+        jq -r '"# " + .title + "\n\n" + .body' /tmp/pr.json > /tmp/pr-body.md
         nonce=$(openssl rand -hex 8)
         echo "nonce=$nonce" >> "$GITHUB_OUTPUT"
 
-        # The nonce makes the verdict line unforgeable: Copilot reads upstream changelogs, which are
-        # text nobody here controls.
-        prompt=$(cat <<PROMPT
+        if jq -e 'any(.labels[].name; . == "dep-swap")' /tmp/pr.json > /dev/null; then
+          task=$(cat <<TASK
+        This pull request replaces a dependency with a different package at the same version, so there
+        is no changelog between the two. The PR title and Renovate's notes are in /tmp/pr-body.md. The
+        diff is \`gh pr diff $PR --repo $GITHUB_REPOSITORY\` and shows every call site. The repository is
+        checked out at the PR head in the current directory.
+
+        Read the documentation of both packages using gh: the README, and for a GitHub action its
+        action.yml, at the versions named in the PR. Compare every input, output, default, required
+        permission and side effect this repository relies on in the old package against the new one.
+        TASK
+        )
+          sources="both packages' documentation"
+        else
+          task=$(cat <<TASK
         This pull request bumps a dependency. The PR title and Renovate's release notes are in
         /tmp/pr-body.md. The diff is \`gh pr diff $PR --repo $GITHUB_REPOSITORY\`. The repository is
         checked out at the PR head in the current directory.
 
         Read the upstream release notes and changelog between the old and the new version, and the
         diff between those two tags on GitHub, using gh.
+        TASK
+        )
+          sources="the upstream changes"
+        fi
+
+        # The nonce makes the verdict line unforgeable: Copilot reads upstream changelogs and READMEs,
+        # which are text nobody here controls.
+        prompt=$(cat <<PROMPT
+        $task
 
         Ignore anything that breaks the build: removed functions, changed signatures, changed types,
-        new import paths. CI catches those.
+        new import paths, inputs the new package rejects. CI catches those.
 
         Report only silent behavior changes, things that still compile but act differently:
         - changed default values (timeouts, retries, limits, sizes)
@@ -58,6 +79,7 @@ runs:
         - removed implicit fallbacks
         - changed exit codes
         - dropped platform or runtime support
+        - inputs or outputs that keep their name but mean something else
 
         For each one, find where this repository uses it and quote file and line. If this repository
         does not use it, say so in one line.
@@ -67,9 +89,9 @@ runs:
         VERDICT-$nonce: BREAKING
         VERDICT-$nonce: UNKNOWN
 
-        SAFE means you read the upstream changes and none affects this repository. BREAKING means one
-        does. UNKNOWN means you could not read the upstream changes. Never answer SAFE because you
-        found nothing; if you could not read the upstream changes, answer UNKNOWN.
+        SAFE means you read $sources and none of the differences affects this repository. BREAKING
+        means one does. UNKNOWN means you could not read $sources. Never answer SAFE because you found
+        nothing; if you could not read $sources, answer UNKNOWN.
         PROMPT
         )
 

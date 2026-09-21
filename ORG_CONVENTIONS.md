@@ -128,6 +128,7 @@ them report on a PR, so the PR sits pending forever.
   by `scripts/rollout-renovate-caller.sh`.
 - non-major updates are grouped into one PR that arms GitHub's auto-merge and lands on green;
   everything digest-pinned.
-- every major gets its own PR and the `dep-major` label. The same run hands it to the Copilot BC
-  check; `bc-safe` arms auto-merge, `bc-breaking` and `bc-unknown` wait for a human.
+- every major gets its own PR and the `dep-major` label, every package replacement its own PR and
+  the `dep-swap` label. The same run hands both to the Copilot BC check; `bc-safe` arms auto-merge,
+  `bc-breaking` and `bc-unknown` wait for a human.
 - per-repo `packageRules` cover only what is specific to that repo.
