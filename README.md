@@ -228,12 +228,14 @@ The BC check (`actions/renovate-bc-check`) asks Copilot CLI for silent behavior 
 what the compiler catches. For a `dep-major` it reads the tag diff first and the changelog second.
 For a `dep-swap` it resolves both packages to code and classifies the swap (rename, wrapper, fork,
 unrelated), which decides what gets diffed; a wrapper's own layer counts, not only the package it
-wraps. Either way Copilot lists every difference before judging any, then for each one traces the
-upstream PR or issue behind it and checks whether the triggering condition (registry, platform,
-input value) exists in the repo; a change whose trigger is absent does not count. The review lands
-as a PR comment with one of the labels `bc-safe`, `bc-breaking`, `bc-unknown`. `bc-safe` arms
-auto-merge; the other two leave the PR for a human. A verdict is tied to the PR head, so a rebase
-gets a fresh check and an unchanged PR is never re-billed.
+wraps, and inner-version drift the old package already carries on its default branch does not.
+Either way Copilot lists every difference before judging any, then for each one traces the
+upstream PR or issue behind it, names what the repo would have to rely on for the change to bite,
+and checks whether that condition (registry, platform, input value) exists in the repo; a change
+whose trigger is absent does not count. The review lands as a PR comment with one of the labels
+`bc-safe`, `bc-breaking`, `bc-unknown`. `bc-safe` arms auto-merge; the other two leave the PR for
+a human. A verdict is tied to the PR head, so a rebase gets a fresh check and an unchanged PR is
+never re-billed, also on a job re-run.
 
 Prompt shape follows two published findings. Changelog-only review misses behavior changes that a
 source diff plus call-site check catches ([arXiv 2510.03480](https://arxiv.org/abs/2510.03480)),

@@ -10,11 +10,31 @@ inputs:
 runs:
   using: composite
   steps:
+    # A job re-run reuses the matrix the list job computed before this PR got its verdict, so the
+    # check repeats here.
+    - name: Skip a head that already has a verdict
+      id: head
+      shell: bash
+      env:
+        PR: ${{ inputs.pr }}
+        GH_TOKEN: ${{ inputs.token }}
+      run: |
+        set -euo pipefail
+        sha=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq .headRefOid)
+        echo "sha=$sha" >> "$GITHUB_OUTPUT"
+        if gh api "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --paginate --jq '.[].body' \
+          | grep -q "renovate-bc-check head=$sha "; then
+          echo "PR #$PR: head $sha already has a verdict"
+          echo "verdicted=true" >> "$GITHUB_OUTPUT"
+        fi
+
     - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+      if: steps.head.outputs.verdicted != 'true'
       with:
         node-version: 24
 
     - name: Install Copilot CLI
+      if: steps.head.outputs.verdicted != 'true'
       shell: bash
       env:
         COPILOT_VERSION: 1.0.87
@@ -23,6 +43,7 @@ runs:
         npm install -g "@github/copilot@$COPILOT_VERSION"
 
     - name: Review the bump
+      if: steps.head.outputs.verdicted != 'true'
       id: review
       shell: bash
       env:
@@ -50,7 +71,10 @@ runs:
           nothing to diff
         - one side wraps the other, or both wrap a third package: list everything the outer layer
           adds or changes (environment variables, extra steps, flags, injected defaults, pinned inner
-          version), and diff the inner version range the same way you would a version bump
+          version), and diff the inner version range the same way you would a version bump. Then
+          check whether the old package's default branch already pins the inner version this PR
+          moves to. If it does, differences from the inner version range are drift the old package
+          would deliver anyway: list them, mark them as drift, and leave them out of the verdict.
         - fork or successor: diff the API at the call sites and read the fork's changes since it
           diverged
         - unrelated package: compare behavior at every call site
@@ -98,8 +122,12 @@ runs:
         2. Find the upstream pull request or issue that introduced it, using gh, and state what
            condition it was added for or what condition makes the new behavior differ: a specific
            registry, platform, runtime, input value, size or rate.
-        3. Say whether that condition is present in this repository, quoting the config line that
-           shows it (registry host, runner, input values). Present, absent, or cannot tell.
+        3. State what this repository would have to rely on for the change to bite. A change that
+           tightens, hardens or stops doing something bites only where the repository depended on
+           the old behavior; name that dependency.
+        4. Say whether that condition or dependency is present in this repository, quoting the
+           config line that shows it (registry host, runner, input values). Present, absent, or
+           cannot tell.
 
         A difference counts as affecting this repository only if the condition is present or you
         cannot tell. A difference whose condition is demonstrably absent does not, and the review
@@ -124,10 +152,12 @@ runs:
           || echo "::warning::copilot exited $? on PR #$PR"
 
     - name: Record the verdict
+      if: steps.head.outputs.verdicted != 'true'
       shell: bash
       env:
         PR: ${{ inputs.pr }}
         NONCE: ${{ steps.review.outputs.nonce }}
+        HEAD: ${{ steps.head.outputs.sha }}
         GH_TOKEN: ${{ inputs.token }}
       run: |
         set -euo pipefail
@@ -137,10 +167,9 @@ runs:
           "VERDICT-$NONCE: BREAKING") verdict=BREAKING ;;
           *) verdict=UNKNOWN ;;
         esac
-        head=$(gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json headRefOid --jq .headRefOid)
 
         {
-          echo "<!-- renovate-bc-check head=$head verdict=$verdict -->"
+          echo "<!-- renovate-bc-check head=$HEAD verdict=$verdict -->"
           echo "## BC check: $verdict"
           echo
           head -c 60000 /tmp/review.md
