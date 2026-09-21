@@ -156,5 +156,7 @@ runs:
 
         echo "PR #$PR: $verdict"
         if [ "$verdict" = SAFE ]; then
-          gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --squash --auto
+          # GitHub refuses to arm auto-merge on a PR whose checks are already green; merge it outright then.
+          gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --squash --auto \
+            || gh pr merge "$PR" --repo "$GITHUB_REPOSITORY" --squash
         fi
