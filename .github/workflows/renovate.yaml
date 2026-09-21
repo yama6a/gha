@@ -1,6 +1,6 @@
 # Self-hosted Renovate. Reads /renovate.json5 from the caller's cloned repo automatically.
-# Afterwards every open PR labelled dep-major whose head has no verdict yet goes through the Copilot
-# BC check in actions/renovate-bc-check, which arms auto-merge on SAFE.
+# Afterwards every open PR labelled dep-major or dep-swap whose head has no verdict yet goes through the
+# Copilot BC check in actions/renovate-bc-check, which arms auto-merge on SAFE.
 name: Renovate (reusable)
 
 on:
@@ -73,7 +73,7 @@ jobs:
           path: ${{ env.cache_dir }}
           key: renovate-cache-${{ github.run_id }}-${{ github.run_attempt }}
 
-  list-majors:
+  list-bc-checks:
     needs: renovate
     if: ${{ !inputs.dry-run }}
     runs-on: ubuntu-26.04-arm
@@ -83,7 +83,7 @@ jobs:
     env:
       GH_TOKEN: ${{ secrets.RENOVATE_TOKEN }}
     steps:
-      - name: Open dep-major PRs without a verdict for their current head
+      - name: Open dep-major and dep-swap PRs without a verdict for their current head
         id: list
         run: |
           set -euo pipefail
@@ -95,14 +95,14 @@ jobs:
               continue
             fi
             prs=$(jq -c --argjson n "$number" '. + [$n]' <<< "$prs")
-          done < <(gh pr list --repo "$GITHUB_REPOSITORY" --label dep-major --state open \
-            --json number,headRefOid --jq '.[] | [.number, .headRefOid] | @tsv')
+          done < <(gh pr list --repo "$GITHUB_REPOSITORY" --state open --limit 100 --json number,headRefOid,labels \
+            --jq '.[] | select(any(.labels[].name; . == "dep-major" or . == "dep-swap")) | [.number, .headRefOid] | @tsv')
           echo "prs=$prs" >> "$GITHUB_OUTPUT"
           echo "$prs"
 
-  major-check:
-    needs: list-majors
-    if: needs.list-majors.outputs.prs != '[]'
+  bc-check:
+    needs: list-bc-checks
+    if: needs.list-bc-checks.outputs.prs != '[]'
     runs-on: ubuntu-26.04-arm
     timeout-minutes: 20
     permissions:
@@ -112,7 +112,7 @@ jobs:
       fail-fast: false
       max-parallel: 1
       matrix:
-        pr: ${{ fromJSON(needs.list-majors.outputs.prs) }}
+        pr: ${{ fromJSON(needs.list-bc-checks.outputs.prs) }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:

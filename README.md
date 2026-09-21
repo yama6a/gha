@@ -194,7 +194,7 @@ above. Needs a `DEPLOY_TOKEN` secret with write access to the target repo.
 ### `renovate.yaml`
 
 Self-hosted Renovate with a cross-run cache, then a Copilot BC check on every open PR labelled
-`dep-major` whose head has no verdict yet. The caller is `templates/renovate.yaml`, applied by
+`dep-major` or `dep-swap` whose head has no verdict yet. The caller is `templates/renovate.yaml`, applied by
 `scripts/rollout-renovate-caller.sh`.
 
 ```yaml
@@ -224,8 +224,9 @@ jobs:
 performs triggers no push workflows either. Copilot CLI is the one thing on `GITHUB_TOKEN`, which
 is what `copilot-requests: write` is for; the credits bill to the repo owner's Copilot seat.
 
-The BC check (`actions/renovate-bc-check`) asks Copilot CLI for silent behavior changes between
-the two versions, ignoring what the compiler catches. The review lands as a PR comment with one of
+The BC check (`actions/renovate-bc-check`) asks Copilot CLI for silent behavior changes, ignoring
+what the compiler catches: between the two versions for a `dep-major`, and between the old and the
+new package's inputs, outputs and defaults at the repo's call sites for a `dep-swap`. The review lands as a PR comment with one of
 the labels `bc-safe`, `bc-breaking`, `bc-unknown`. `bc-safe` arms auto-merge; the other two leave
 the PR for a human. A verdict is tied to the PR head, so a rebase gets a fresh check and an
 unchanged PR is never re-billed.
@@ -234,7 +235,7 @@ unchanged PR is never re-billed.
 
 | preset | extends | contents |
 |---|---|---|
-| `default.json5` | `github>yama6a/gha:default.json5` | `config:recommended`, dashboard, digest pinning, grouped non-majors on native auto-merge, majors labelled `dep-major` and never auto-merged |
+| `default.json5` | `github>yama6a/gha:default.json5` | `config:recommended`, dashboard, digest pinning, grouped non-majors on native auto-merge, majors labelled `dep-major` and replacements `dep-swap`, neither auto-merged |
 | `go.json5` | `github>yama6a/gha:go.json5` | `gomodTidy`, import-path rewrites, `go` directive bumps, strict constraints |
 | `node.json5` | `github>yama6a/gha:node.json5` | vite, eslint and node major groups, typescript below 7, `engines` ignored |
 
