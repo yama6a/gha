@@ -81,8 +81,18 @@ runs:
         - dropped platform or runtime support
         - inputs or outputs that keep their name but mean something else
 
-        For each one, find where this repository uses it and quote file and line. If this repository
-        does not use it, say so in one line.
+        For each one:
+        1. Find where this repository uses it and quote file and line. If this repository does not
+           use it, say so in one line and stop there.
+        2. Find the upstream pull request or issue that introduced it, using gh, and state what
+           condition it was added for or what condition makes the new behavior differ: a specific
+           registry, platform, runtime, input value, size or rate.
+        3. Say whether that condition is present in this repository, quoting the config line that
+           shows it (registry host, runner, input values). Present, absent, or cannot tell.
+
+        A difference counts as affecting this repository only if the condition is present or you
+        cannot tell. A difference whose condition is demonstrably absent does not, and the review
+        must say why.
 
         Your last line must be exactly one of the three below, with nothing after it:
         VERDICT-$nonce: SAFE

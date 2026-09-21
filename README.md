@@ -226,8 +226,11 @@ is what `copilot-requests: write` is for; the credits bill to the repo owner's C
 
 The BC check (`actions/renovate-bc-check`) asks Copilot CLI for silent behavior changes, ignoring
 what the compiler catches: between the two versions for a `dep-major`, and between the old and the
-new package's inputs, outputs and defaults at the repo's call sites for a `dep-swap`. The review lands as a PR comment with one of
-the labels `bc-safe`, `bc-breaking`, `bc-unknown`. `bc-safe` arms auto-merge; the other two leave
+new package's inputs, outputs and defaults at the repo's call sites for a `dep-swap`. For each
+change it traces the upstream PR or issue behind it and checks whether the condition that triggers
+it (registry, platform, input value) exists in the repo; a change whose trigger is absent does not
+count. The review lands as a PR comment with one of the labels `bc-safe`, `bc-breaking`,
+`bc-unknown`. `bc-safe` arms auto-merge; the other two leave
 the PR for a human. A verdict is tied to the PR head, so a rebase gets a fresh check and an
 unchanged PR is never re-billed.
 
