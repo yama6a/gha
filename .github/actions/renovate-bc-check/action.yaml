@@ -37,7 +37,7 @@ runs:
       if: steps.head.outputs.verdicted != 'true'
       shell: bash
       env:
-        COPILOT_VERSION: 1.0.87
+        COPILOT_VERSION: 1.0.88
       run: |
         set -euo pipefail
         npm install -g "@github/copilot@$COPILOT_VERSION"
