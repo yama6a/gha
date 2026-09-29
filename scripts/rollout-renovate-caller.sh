@@ -8,6 +8,7 @@ bolan-admin-fe              | master |
 bolan-api                   | main   |
 bolan-fe                    | master |
 bolan-self-crawler          | main   |
+claudetainer                | main   |
 codarr                      | main   |
 longhorn-replica-affinity   | main   |
 offgrid                     | main   | chart-lock

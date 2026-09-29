@@ -9,6 +9,7 @@ bolan-admin-fe              | master | false | private | node / node,renovate-co
 bolan-api                   | main   | false | private | go / go,renovate-config
 bolan-fe                    | master | false | private | node / node,e2e / e2e,renovate-config
 bolan-self-crawler          | main   | false | private | go / go,renovate-config
+claudetainer                | main   | false | public  | go / go,shell,yaml,renovate-config,build-amd64,build-arm64
 codarr                      | main   | false | public  | go / go,node / node,renovate-config
 gha                         | main   | false | public  | yaml,renovate-presets,kubeconform,shell-checks,hadolint,helm-chart-checks
 longhorn-replica-affinity   | main   | false | public  | release label,go / go,chart,yaml,renovate-config
