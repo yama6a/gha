@@ -18,6 +18,7 @@ pi5-k8s-sample-app          | main   |
 pontiki-website             | main   |
 praxis                      | main   |
 smartctl-exporter-multiarch | main   |
+subtitle-toolbox            | master |
 talos-raspberry-pi5         | main   |
 talos-raspberry-pi5-cluster | main   |
 '
