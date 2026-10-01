@@ -126,6 +126,8 @@ jobs:
 
       # A two-platform QEMU build cannot --load a manifest list, so the scan runs against a pushed
       # temp tag and the release tag is a manifest copy of it afterwards.
+      # No cache-from or cache-to. The GHA layer cache restored nothing slow in any caller, took up to
+      # 229s to export, and filled the 10 GB Actions cache. Measurements: https://github.com/yama6a/gha/pull/51
       - name: Build and push the scan candidate
         uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
         with:
