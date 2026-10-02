@@ -15,12 +15,13 @@ gha                         | main   | false | public  | yaml,renovate-presets,k
 longhorn-replica-affinity   | main   | false | public  | release label,go / go,chart,yaml,renovate-config
 offgrid                     | main   | false | public  | helm,shell,yaml,renovate-config,chart-tests
 offgrid-private             | main   | true  | private | helm,shell,yaml,renovate-config,chart-tests
+php-glyph-ocr               | main   | false | public  | release label,php / php,yaml,renovate-config
 pgsandbox                   | main   | false | public  | go / go,renovate-config
 pi5-k8s-sample-app          | main   | false | public  | go / go,renovate-config
 pontiki-website             | main   | false | private | node / node,links,renovate-config
 praxis                      | main   | false | public  | node / node,renovate-config
 smartctl-exporter-multiarch | main   | false | public  | shell,docker,yaml,renovate-config
-subtitle-toolbox            | master | false | public  | release label,php,yaml,renovate-config
+subtitle-toolbox            | master | false | public  | release label,php / php,yaml,renovate-config
 talos-raspberry-pi5         | main   | false | public  | shell,yaml,renovate-config,main-is-green
 talos-raspberry-pi5-cluster | main   | false | public  | shell,yaml,renovate-config
 '

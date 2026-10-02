@@ -1,0 +1,18 @@
+name: Release label
+description: Fails a pull request that does not carry exactly one of the labels major, minor, patch, skip-release.
+runs:
+  using: composite
+  steps:
+    - name: Exactly one release label
+      shell: bash
+      env:
+        LABELS: ${{ toJSON(github.event.pull_request.labels.*.name) }}
+      run: |
+        set -euo pipefail
+        picked=$(jq -r '.[]' <<< "$LABELS" | grep -x -E 'patch|minor|major|skip-release' || true)
+        count=$(grep -c . <<< "$picked" || true)
+        if [ "$count" -ne 1 ]; then
+          echo "::error::${count} release labels (${picked//$'\n'/, }); need exactly one of patch, minor, major, skip-release"
+          exit 1
+        fi
+        echo "release label: ${picked}"

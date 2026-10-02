@@ -1,0 +1,88 @@
+# Semver release on every merge to the default branch. The bump is the strongest of the labels
+# major, minor, patch on every PR merged since the last release tag. skip-release, or no label,
+# releases nothing. The release-label action makes every PR carry exactly one of the four.
+name: PHP release (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      tag-prefix:
+        description: Prefix of the release tags, for example v; empty gives bare 1.2.3 tags as Packagist reads them
+        type: string
+        default: ''
+      create-release:
+        description: Create the tag and GitHub release here; false only outputs the version, so the caller builds artifacts first and tags last
+        type: boolean
+        default: true
+    outputs:
+      version:
+        description: The next version without the prefix, empty when no release is due
+        value: ${{ jobs.release.outputs.version }}
+      tag:
+        description: The next tag with the prefix, empty when no release is due
+        value: ${{ jobs.release.outputs.tag }}
+
+jobs:
+  release:
+    name: release
+    runs-on: ubuntu-26.04-arm
+    permissions:
+      contents: write  # create the tag and the GitHub release
+    outputs:
+      version: ${{ steps.next.outputs.version }}
+      tag: ${{ steps.next.outputs.tag }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          fetch-depth: 0  # the tag list is the version history
+
+      # A rerun after a release finds HEAD tagged, so the range is empty and nothing is released twice.
+      - name: Pick the next version
+        id: next
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PREFIX: ${{ inputs.tag-prefix }}
+        run: |
+          set -euo pipefail
+          latest=""
+          while IFS= read -r tag; do
+            [[ $tag == "$PREFIX"* && ${tag#"$PREFIX"} =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || continue
+            latest=$tag
+            break
+          done < <(git tag -l --sort=-v:refname)
+          range="${latest:+${latest}..}HEAD"
+
+          labels=""
+          for sha in $(git rev-list "$range"); do
+            labels+=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/pulls" \
+              --jq '.[0].labels[]?.name' 2> /dev/null || true)$'\n'
+          done
+
+          kind=none
+          for want in patch minor major; do
+            if grep -qx "$want" <<< "$labels"; then kind=$want; fi
+          done
+
+          current=${latest#"$PREFIX"}
+          IFS=. read -r major minor patch <<< "${current:-0.0.0}"
+          case "$kind" in
+            major) major=$((major + 1)); minor=0; patch=0 ;;
+            minor) minor=$((minor + 1)); patch=0 ;;
+            patch) patch=$((patch + 1)) ;;
+          esac
+          version=""
+          tag=""
+          if [ "$kind" != none ]; then
+            version="${major}.${minor}.${patch}"
+            tag="${PREFIX}${version}"
+          fi
+          echo "since ${latest:-<start>}: ${kind}${tag:+, next tag ${tag}}"
+          echo "version=${version}" >> "$GITHUB_OUTPUT"
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+
+      - name: Tag and release
+        if: inputs.create-release && steps.next.outputs.tag != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.next.outputs.tag }}
+        run: gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --generate-notes

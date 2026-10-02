@@ -1,0 +1,20 @@
+{
+  // Composer repos. Extend it with "github>yama6a/gha:php.json5", alongside the default preset.
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  // Nothing else refreshes the transitive dependencies in composer.lock. Renovate never groups
+  // this with other updates, so it is its own auto-merged PR. The default schedule, before 4am on
+  // Monday, never matches the 05:13 UTC run.
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["* * * * 1"]
+  },
+  "packageRules": [
+    {
+      // Raising the PHP floor drops users, so it is a release decision and never a bot update.
+      "description": "the php constraint in composer.json is set by hand",
+      "matchManagers": ["composer"],
+      "matchPackageNames": ["php"],
+      "enabled": false
+    }
+  ]
+}
