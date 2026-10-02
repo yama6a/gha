@@ -172,6 +172,32 @@ All four permissions are required; a reusable job gets only what the caller gran
 | `build-args` | none; newline `KEY=VALUE` |
 | `version` | none; use this string instead of the integer counter |
 | `create-release` | `true`; `false` when the caller publishes more artifacts and tags itself |
+| `moving-tags` | `false`; `true` also tags `1.2`, `1` and `latest` for version `1.2.3` |
+
+`moving-tags` moves `latest` to every release, so use it only where releases come from one branch.
+
+### `docker-build-check.yaml`
+
+The PR check for an image: hadolint, a build for every platform without a push, and an optional
+smoke test against the image built for the runner. It needs only `contents: read`, so a PR caller
+grants nothing more. The context is `docker / docker`.
+
+```yaml
+jobs:
+  docker:
+    uses: yama6a/gha/.github/workflows/docker-build-check.yaml@v2
+    with:
+      dockerfile: .build/Dockerfile
+      smoke-test: docker run --rm "$IMAGE" --version
+```
+
+| input | default |
+|---|---|
+| `dockerfile` | `Dockerfile` |
+| `context` | `.` |
+| `platforms` | `linux/amd64,linux/arm64` |
+| `build-args` | none; newline `KEY=VALUE` |
+| `smoke-test` | none; a shell command, `$IMAGE` names the loaded image |
 
 ### `docker-build-release-multiarch.yaml`
 
