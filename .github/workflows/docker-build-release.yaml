@@ -28,6 +28,10 @@ on:
         description: Create the GitHub release here; false when the caller publishes more artifacts first and tags itself
         type: boolean
         default: true
+      moving-tags:
+        description: Also point the MAJOR.MINOR, MAJOR and latest tags at the release; needs a MAJOR.MINOR.PATCH version
+        type: boolean
+        default: false
     outputs:
       version:
         description: The release version that was built and pushed
@@ -76,13 +80,25 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ inputs.version }}
+          MOVING_TAGS: ${{ inputs.moving-tags }}
         run: |
+          set -euo pipefail
           if [ -z "$VERSION" ]; then
             latest=$(gh release list --limit 1 --json tagName --jq '.[0].tagName // "0"')
             VERSION=$((latest + 1))
             echo "Latest release: ${latest:-<none>} -> next: $VERSION"
           fi
+          tags="$VERSION"
+          if [ "$MOVING_TAGS" = true ]; then
+            # Checked before the build, so a bad version fails in seconds and pushes nothing.
+            if [[ ! $VERSION =~ ^([0-9]+)\.([0-9]+)\.[0-9]+$ ]]; then
+              echo "::error::moving-tags needs a MAJOR.MINOR.PATCH version, got ${VERSION}"
+              exit 1
+            fi
+            tags+=" ${BASH_REMATCH[1]}.${BASH_REMATCH[2]} ${BASH_REMATCH[1]} latest"
+          fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tags=$tags" >> "$GITHUB_OUTPUT"
 
       - name: Set up Node
         if: inputs.build-command != ''
@@ -158,10 +174,16 @@ jobs:
       # The ci-* tag is left in place on purpose: the release tag is a byte-identical copy with
       # the same digest, and GHCR deletes by digest, so removing the ci-* package version
       # would take the release tag with it.
-      - name: Promote the scanned image to the release tag
+      - name: Promote the scanned image to the release tags
         env:
-          VERSION: ${{ steps.version.outputs.version }}
-        run: docker buildx imagetools create -t "${IMAGE}:${VERSION}" "${IMAGE}:${CI_TAG}"
+          TAGS: ${{ steps.version.outputs.tags }}
+        run: |
+          set -euo pipefail
+          args=()
+          for tag in $TAGS; do
+            args+=(-t "${IMAGE}:${tag}")
+          done
+          docker buildx imagetools create "${args[@]}" "${IMAGE}:${CI_TAG}"
 
       - name: Read the released digest
         id: released

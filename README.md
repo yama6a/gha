@@ -172,6 +172,9 @@ All four permissions are required; a reusable job gets only what the caller gran
 | `build-args` | none; newline `KEY=VALUE` |
 | `version` | none; use this string instead of the integer counter |
 | `create-release` | `true`; `false` when the caller publishes more artifacts and tags itself |
+| `moving-tags` | `false`; `true` also tags `1.2`, `1` and `latest` for version `1.2.3` |
+
+`moving-tags` moves `latest` to every release, so use it only where releases come from one branch.
 
 ### `docker-build-release-multiarch.yaml`
 
