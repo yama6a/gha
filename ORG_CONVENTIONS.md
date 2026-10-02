@@ -8,7 +8,7 @@ gha holds the shared workflows, composite actions and Renovate presets; `v2` is 
 | thing | rule |
 |---|---|
 | default branch | left as is, `main` or `master`; nothing in gha reads it |
-| `renovate.json5` | extends `github>yama6a/gha:default.json5`, plus `go.json5` or `node.json5` |
+| `renovate.json5` | extends `github>yama6a/gha:default.json5`, plus `go.json5`, `node.json5` or `php.json5` |
 | CI | a `renovate-config` job, everywhere |
 | `.yamllint.yml` | absent, unless the repo extends `ignore:` |
 | `.dockerignore` | next to every Dockerfile |
@@ -32,6 +32,8 @@ Applied by `scripts/repo-settings.sh`, not by hand.
 |---|---|
 | Go | `go / go` |
 | Node | `node / node` |
+| PHP | `php / php` |
+| label-driven semver release | `release label` |
 | Playwright | `e2e / e2e` |
 | shell and config repos | `shell`, `yaml` |
 | every repo | `renovate-config` |
@@ -59,6 +61,21 @@ them report on a PR, so the PR sits pending forever.
   the same checks as go-ci.
 - a library releases through `go-release.yaml@v2`: a semver tag on every merge to main, bumped
   by a `release:major` or `release:minor` label on the merged PR, patch otherwise.
+
+## PHP
+
+- the `php` constraint in `composer.json` `require` is the support floor. A human raises it as a
+  release decision, so `php.json5` keeps Renovate off it.
+- `config.platform.php` in `composer.json` holds the floor too, so `composer.lock` resolves for
+  the oldest supported version.
+- `composer.lock` committed, refreshed weekly by Renovate's lock file maintenance.
+- a `test` composer script, and every other check CI runs is a composer script too.
+- `uses: yama6a/gha/.github/workflows/php-ci.yaml@v2`. Its default PHP versions are 8.2 to 8.5.
+  A repo with a higher floor passes `php-versions`.
+- a library releases through `php-release.yaml@v2`: bare `1.2.3` tags for Packagist, bumped by the
+  strongest `major`, `minor` or `patch` label on the PRs merged since the last tag. The
+  `actions/release-label` check makes every PR carry exactly one of those or `skip-release`, and
+  `renovate.json5` sets `labels: ["patch"]`.
 
 ## Frontend
 

@@ -1,0 +1,75 @@
+name: PHP PR CI (reusable)
+
+on:
+  workflow_call:
+    inputs:
+      php-versions:
+        description: JSON array of PHP versions, one matrix shard each
+        type: string
+        default: '["8.2", "8.3", "8.4", "8.5"]'
+      extensions:
+        description: PHP extensions for shivammathur/setup-php, comma-separated
+        type: string
+        default: ''
+      composer-scripts:
+        description: Composer scripts to run after the audit, one per line, in order
+        type: string
+        default: test
+      runner:
+        type: string
+        default: ubuntu-26.04-arm
+
+jobs:
+  test:
+    name: test (php ${{ matrix.php }})
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ${{ fromJSON(inputs.php-versions) }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Set up PHP
+        uses: shivammathur/setup-php@f3e473d116dcccaddc5834248c87452386958240  # 2.37.2
+        with:
+          php-version: ${{ matrix.php }}
+          extensions: ${{ inputs.extensions }}
+          coverage: none
+          tools: composer
+
+      - name: Validate composer.json
+        run: composer validate --strict
+
+      - name: Install dependencies
+        run: composer install --no-progress --no-interaction
+
+      - name: Audit
+        run: composer audit
+
+      - name: Run the composer scripts
+        env:
+          SCRIPTS: ${{ inputs.composer-scripts }}
+        run: |
+          set -euo pipefail
+          while IFS= read -r script; do
+            [ -n "$script" ] || continue
+            echo "::group::composer run-script $script"
+            composer run-script "$script"
+            echo "::endgroup::"
+          done <<< "$SCRIPTS"
+
+  # A matrix shard cannot be a required check on its own, so branch protection requires this job.
+  check:
+    name: php
+    if: always()
+    needs: test
+    runs-on: ubuntu-slim
+    steps:
+      - name: Every PHP version passed
+        env:
+          RESULT: ${{ needs.test.result }}
+        run: |
+          echo "test matrix: $RESULT"
+          [ "$RESULT" = success ]

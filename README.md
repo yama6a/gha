@@ -7,7 +7,8 @@ Pin every `uses:` to `@v2`. How the repos themselves are set up is in
 ## Reusable workflows
 
 Required-check names follow one rule: the caller's job id is the workflow's short name, the
-workflow's job carries the same `name:`, so the context is `go / go`, `node / node`, `e2e / e2e`.
+workflow's job carries the same `name:`, so the context is `go / go`, `node / node`, `php / php`,
+`e2e / e2e`.
 
 ### `go-ci.yaml`
 
@@ -61,6 +62,32 @@ jobs:
 | `working-directory` | `.` |
 | `build-env` | none; newline `KEY=VALUE`, exported for the build step only |
 | `runner` | `ubuntu-24.04-arm` |
+
+### `php-ci.yaml`
+
+One job per PHP version: `composer validate --strict`, `composer install`, `composer audit`, then
+each composer script in `composer-scripts`. The job `php` passes only when every version passed.
+It is the required check, `php / php`. The per-version jobs are not required, so the version list
+can change freely.
+
+```yaml
+jobs:
+  php:
+    uses: yama6a/gha/.github/workflows/php-ci.yaml@v2
+    # with:
+    #   php-versions: '["8.4", "8.5"]'
+    #   extensions: gd, imagick
+    #   composer-scripts: |
+    #     lint
+    #     test
+```
+
+| input | default |
+|---|---|
+| `php-versions` | `["8.2", "8.3", "8.4", "8.5"]`; a JSON array |
+| `extensions` | none; comma-separated, passed to `shivammathur/setup-php` |
+| `composer-scripts` | `test`; one script per line, run in order |
+| `runner` | `ubuntu-26.04-arm` |
 
 ### `playwright-e2e.yaml`
 
@@ -179,6 +206,63 @@ jobs:
 |---|---|
 | `initial-version` | `v0.1.0`; the tag created when the repo has none |
 
+### `php-release.yaml`
+
+Semver tag and GitHub release on every merge to the default branch, with notes from
+`gh release create --generate-notes`. The bump comes from the labels of every PR merged since the
+last release tag: `major`, `minor`, `patch`, and the strongest one wins. `skip-release` or no label
+releases nothing, unless another PR in the same range asks for a release. The first release counts
+up from `0.0.0`. A rerun finds no new PR since the tag and does nothing. Outputs `version` and `tag`,
+both empty when no release is due.
+
+```yaml
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    uses: yama6a/gha/.github/workflows/php-release.yaml@v2
+```
+
+| input | default |
+|---|---|
+| `tag-prefix` | none; tags are bare `1.2.3`, which Packagist reads. `v` gives `v1.2.3` |
+| `create-release` | `true`; `false` only computes `version` and `tag` |
+
+With `create-release: false` the caller builds its artifacts first and tags last, so a failed
+build leaves no release behind:
+
+```yaml
+jobs:
+  version:
+    uses: yama6a/gha/.github/workflows/php-release.yaml@v2
+    with:
+      create-release: false
+
+  publish:
+    needs: version
+    if: needs.version.outputs.tag != ''
+    runs-on: ubuntu-26.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - run: make phar VERSION="${{ needs.version.outputs.version }}"
+      - env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ needs.version.outputs.tag }}
+        run: gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --generate-notes build/app.phar
+```
+
+The labels come from the PR, so every PR carries exactly one of them. The `actions/release-label`
+check enforces that, and a repo that uses it sets `labels: ["patch"]` in its `renovate.json5`.
+
 ### `deploy-gitops.yaml`
 
 Bumps an image tag in a GitOps repo's `values.yaml`, opens a PR, arms auto-merge. Caller example
@@ -251,6 +335,7 @@ label, the nonce and required checks.
 | `default.json5` | `github>yama6a/gha:default.json5` | `config:recommended`, dashboard, digest pinning, grouped non-majors on native auto-merge, majors labelled `dep-major` and replacements `dep-swap`, neither auto-merged |
 | `go.json5` | `github>yama6a/gha:go.json5` | `gomodTidy`, import-path rewrites, `go` directive bumps, strict constraints |
 | `node.json5` | `github>yama6a/gha:node.json5` | vite, eslint and node major groups, typescript below 7, `engines` ignored |
+| `php.json5` | `github>yama6a/gha:php.json5` | weekly `composer.lock` maintenance on Monday, the `php` constraint in `composer.json` left alone |
 
 ```json5
 {
@@ -340,6 +425,27 @@ piped to kubeconform, optional schema and README drift checks.
 | `values` | none; `<chart>=<values file>` lines, for charts that `fail` without values |
 | `schema` | `off`; `check` regenerates `values.schema.json` and fails on drift |
 | `docs` | `off`; `check` regenerates the README with helm-docs and fails on drift |
+
+### `actions/release-label`
+
+Fails a PR that does not carry exactly one of the labels `major`, `minor`, `patch`,
+`skip-release`, which `php-release.yaml` reads. No checkout needed. Keep the job name
+`release label`, which is the required context. Run it only on `pull_request`: a push carries
+no labels. Add `labeled` and `unlabeled` to the PR trigger types, so a label change re-runs it.
+
+```yaml
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, labeled, unlabeled]
+
+jobs:
+  release-label:
+    name: release label
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-26.04-arm
+    steps:
+      - uses: yama6a/gha/.github/actions/release-label@v2
+```
 
 ### `actions/validate-renovate-config`
 
