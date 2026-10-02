@@ -176,6 +176,29 @@ All four permissions are required; a reusable job gets only what the caller gran
 
 `moving-tags` moves `latest` to every release, so use it only where releases come from one branch.
 
+### `docker-build-check.yaml`
+
+The PR check for an image: hadolint, a build for every platform without a push, and an optional
+smoke test against the image built for the runner. It needs only `contents: read`, so a PR caller
+grants nothing more. The context is `docker / docker`.
+
+```yaml
+jobs:
+  docker:
+    uses: yama6a/gha/.github/workflows/docker-build-check.yaml@v2
+    with:
+      dockerfile: .build/Dockerfile
+      smoke-test: docker run --rm "$IMAGE" --version
+```
+
+| input | default |
+|---|---|
+| `dockerfile` | `Dockerfile` |
+| `context` | `.` |
+| `platforms` | `linux/amd64,linux/arm64` |
+| `build-args` | none; newline `KEY=VALUE` |
+| `smoke-test` | none; a shell command, `$IMAGE` names the loaded image |
+
 ### `docker-build-release-multiarch.yaml`
 
 Same result, one native runner per architecture, for a build that cannot run under QEMU. Same
