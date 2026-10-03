@@ -173,8 +173,10 @@ All four permissions are required; a reusable job gets only what the caller gran
 | `version` | none; use this string instead of the integer counter |
 | `create-release` | `true`; `false` when the caller publishes more artifacts and tags itself |
 | `moving-tags` | `false`; `true` also tags `1.2`, `1` and `latest` for version `1.2.3` |
+| `tag-suffix` | none; `-tesseract` tags `1.2.3-tesseract`, and with `moving-tags` also `1.2-tesseract`, `1-tesseract` and `tesseract` |
 
 `moving-tags` moves `latest` to every release, so use it only where releases come from one branch.
+Two calls with different `tag-suffix` values publish two images of one release, for example a full and a slim one.
 
 ### `docker-build-check.yaml`
 
