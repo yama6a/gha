@@ -32,6 +32,10 @@ on:
         description: Also point the MAJOR.MINOR, MAJOR and latest tags at the release; needs a MAJOR.MINOR.PATCH version
         type: boolean
         default: false
+      tag-suffix:
+        description: Appended to every tag, for example -tesseract gives 1.2.3-tesseract; latest becomes the suffix without its dash
+        type: string
+        default: ''
     outputs:
       version:
         description: The release version that was built and pushed
@@ -39,7 +43,9 @@ on:
 
 env:
   IMAGE: ghcr.io/${{ github.repository }}
-  CI_TAG: ci-${{ github.run_id }}
+  # The suffix keeps two calls of this workflow in one caller run off the same scan tag.
+  CI_TAG: ci-${{ github.run_id }}${{ inputs.tag-suffix }}
+  SUFFIX: ${{ inputs.tag-suffix }}
 
 jobs:
   build-push:
@@ -83,19 +89,24 @@ jobs:
           MOVING_TAGS: ${{ inputs.moving-tags }}
         run: |
           set -euo pipefail
+          if [ -n "$SUFFIX" ] && [[ ! $SUFFIX =~ ^-[a-z0-9][a-z0-9._-]*$ ]]; then
+            echo "::error::tag-suffix must start with - and hold only a-z, 0-9, ., _ and -, got ${SUFFIX}"
+            exit 1
+          fi
           if [ -z "$VERSION" ]; then
             latest=$(gh release list --limit 1 --json tagName --jq '.[0].tagName // "0"')
             VERSION=$((latest + 1))
             echo "Latest release: ${latest:-<none>} -> next: $VERSION"
           fi
-          tags="$VERSION"
+          tags="${VERSION}${SUFFIX}"
           if [ "$MOVING_TAGS" = true ]; then
             # Checked before the build, so a bad version fails in seconds and pushes nothing.
             if [[ ! $VERSION =~ ^([0-9]+)\.([0-9]+)\.[0-9]+$ ]]; then
               echo "::error::moving-tags needs a MAJOR.MINOR.PATCH version, got ${VERSION}"
               exit 1
             fi
-            tags+=" ${BASH_REMATCH[1]}.${BASH_REMATCH[2]} ${BASH_REMATCH[1]} latest"
+            latest=${SUFFIX:-latest}
+            tags+=" ${BASH_REMATCH[1]}.${BASH_REMATCH[2]}${SUFFIX} ${BASH_REMATCH[1]}${SUFFIX} ${latest#-}"
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tags=$tags" >> "$GITHUB_OUTPUT"
@@ -190,7 +201,7 @@ jobs:
         env:
           VERSION: ${{ steps.version.outputs.version }}
         run: |
-          digest=$(docker buildx imagetools inspect "${IMAGE}:${VERSION}" --format '{{json .Manifest.Digest}}' | tr -d '"')
+          digest=$(docker buildx imagetools inspect "${IMAGE}:${VERSION}${SUFFIX}" --format '{{json .Manifest.Digest}}' | tr -d '"')
           echo "digest=$digest" >> "$GITHUB_OUTPUT"
 
       # Signed attestations exist for private repos only on Enterprise Cloud; on a
@@ -213,4 +224,4 @@ jobs:
           gh release create "$VERSION" \
             --target "${{ github.sha }}" \
             --title "$VERSION" \
-            --notes "Image: ${IMAGE}:${VERSION}"
+            --notes "Image: ${IMAGE}:${VERSION}${SUFFIX}"
