@@ -8,7 +8,7 @@ airlock                     | main   | false | public  | shell,yaml,renovate-con
 bolan-admin-fe              | master | false | private | node / node,renovate-config
 bolan-api                   | main   | false | private | go / go,renovate-config
 bolan-fe                    | master | false | private | node / node,e2e / e2e,renovate-config
-bolan-self-crawler          | main   | false | private | go / go,renovate-config
+bolan-self-crawler          | main   | false | private | go / go,renovate-config,smoke-amd64,smoke-arm64
 claudetainer                | main   | false | public  | go / go,shell,yaml,renovate-config,build-amd64,build-arm64
 codarr                      | main   | false | public  | go / go,node / node,renovate-config
 gha                         | main   | false | public  | yaml,renovate-presets,kubeconform,shell-checks,hadolint,helm-chart-checks
