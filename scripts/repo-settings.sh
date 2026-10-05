@@ -19,7 +19,7 @@ php-glyph-ocr               | main   | false | public  | release label,php / php
 pgsandbox                   | main   | false | public  | go / go,renovate-config
 pi5-k8s-sample-app          | main   | false | public  | go / go,renovate-config
 pontiki-website             | main   | false | private | node / node,links,renovate-config
-praxis                      | main   | false | public  | node / node,renovate-config
+praxis                      | main   | false | private | node / node,renovate-config
 smartctl-exporter-multiarch | main   | false | public  | shell,docker,yaml,renovate-config
 subtitle-toolbox            | master | false | public  | release label,php / php,phar,docker / docker,docker-tesseract / docker,tesseract,yaml,renovate-config
 talos-raspberry-pi5         | main   | false | public  | shell,yaml,renovate-config,main-is-green
