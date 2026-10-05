@@ -103,6 +103,8 @@ them report on a PR, so the PR sits pending forever.
 - an eslint or TypeScript version hold lives in the repo that has the blocker, with the blocker
   named next to it. Never in the shared Renovate preset.
 - `uses: yama6a/gha/.github/workflows/node-ci.yaml@v2`.
+- a high or critical npm audit advisory no released version can clear goes in
+  `.npm-audit-ignore`, one GHSA id per line, reason after a `#`.
 - Playwright through `playwright-e2e.yaml@v2`, with a caller-side `.github/workflows/warm-cache.yaml`
   that fills the shared npm and browser cache.
 - serving image and framework are per project.

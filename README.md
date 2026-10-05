@@ -47,6 +47,17 @@ CI agree.
 `format:check`, `typecheck`, `test`, `npm audit --audit-level=high`, `build`. Node version from
 `.nvmrc`. Every script must exist; `"exit 0"` where a project has nothing to do.
 
+The audit runs through `scripts/npm-audit.sh`. It fails on the same findings as
+`npm audit --audit-level=high`: a high or critical advisory. A caller can allowlist an id in
+`.npm-audit-ignore` next to `package.json`. One GHSA id per line, the reason after a `#`:
+
+```
+GHSA-vfj7-8cjw-p6xm  # braces: no patched release, reached only through dev tooling
+```
+
+Use it only when no released version clears the advisory. An id listed there that npm audit no
+longer reports as high or critical produces a warning, so the entries get cleaned up.
+
 ```yaml
 jobs:
   node:

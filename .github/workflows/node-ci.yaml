@@ -83,8 +83,26 @@ jobs:
       - name: Test
         run: npm test
 
+      # job.workflow_sha is this reusable workflow's own commit, so a caller pinned
+      # to @v2 gets the v2 script and never main's.
+      - name: Fetch the audit script
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .gha
+          sparse-checkout: scripts/npm-audit.sh
+          sparse-checkout-cone-mode: false  # cone mode selects directories, not single files
+
+      - name: Stage the audit script
+        run: |
+          install -m 0755 "$GITHUB_WORKSPACE/.gha/scripts/npm-audit.sh" /tmp/npm-audit.sh
+          rm -rf "$GITHUB_WORKSPACE/.gha"
+
+      # Wrapped so a repo can allowlist a GHSA id in .npm-audit-ignore. The script says when
+      # that is the only way out.
       - name: Audit
-        run: npm audit --audit-level=high
+        run: /tmp/npm-audit.sh
 
       - name: Set build env
         if: inputs.build-env != ''

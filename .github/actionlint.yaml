@@ -8,6 +8,10 @@ paths:
     ignore:
       # actionlint 1.7.x has not caught up with the job context's workflow identity properties
       - 'property "workflow_(sha|repository)" is not defined'
+  .github/workflows/node-ci.yaml:
+    ignore:
+      # actionlint 1.7.x has not caught up with the job context's workflow identity properties
+      - 'property "workflow_(sha|repository)" is not defined'
   .github/workflows/docker-build-*.yaml:
     ignore:
       # actionlint 1.7.x has not caught up with the job context's workflow identity properties
