@@ -371,10 +371,10 @@ label, the nonce and required checks.
 
 | preset | extends | contents |
 |---|---|---|
-| `default.json5` | `github>yama6a/gha:default.json5` | `config:recommended`, dashboard, digest pinning, grouped non-majors on native auto-merge, majors labelled `dep-major` and replacements `dep-swap`, neither auto-merged |
+| `default.json5` | `github>yama6a/gha:default.json5` | `config:recommended`, dashboard, digest pinning, grouped non-majors on native auto-merge, lock file maintenance on every run, majors labelled `dep-major` and replacements `dep-swap`, neither auto-merged |
 | `go.json5` | `github>yama6a/gha:go.json5` | `gomodTidy`, import-path rewrites, `go` directive bumps, strict constraints |
 | `node.json5` | `github>yama6a/gha:node.json5` | vite, eslint and node major groups, typescript below 7, `engines` ignored |
-| `php.json5` | `github>yama6a/gha:php.json5` | weekly `composer.lock` maintenance on Monday, the `php` constraint in `composer.json` left alone |
+| `php.json5` | `github>yama6a/gha:php.json5` | the `php` constraint in `composer.json` left alone |
 
 ```json5
 {

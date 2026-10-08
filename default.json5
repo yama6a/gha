@@ -19,6 +19,14 @@
   // without them GitHub would merge a PR whose tests failed.
   "platformAutomerge": true,
 
+  // Nothing else moves transitive dependencies to the newest version their parents allow. Renovate never
+  // groups this with other updates, so it is its own auto-merged PR. The default window, before 4am on
+  // Monday, never matches the Renovate cron.
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["at any time"]
+  },
+
   "packageRules": [
     {
       "description": "combine all non-major updates into one auto-merged PR",
