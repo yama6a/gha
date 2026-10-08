@@ -68,7 +68,7 @@ them report on a PR, so the PR sits pending forever.
   release decision, so `php.json5` keeps Renovate off it.
 - `config.platform.php` in `composer.json` holds the floor too, so `composer.lock` resolves for
   the oldest supported version.
-- `composer.lock` committed, refreshed weekly by Renovate's lock file maintenance.
+- `composer.lock` committed, refreshed on every run by Renovate's lock file maintenance.
 - a `test` composer script, and every other check CI runs is a composer script too.
 - `uses: yama6a/gha/.github/workflows/php-ci.yaml@v2`. Its default PHP versions are 8.2 to 8.5.
   A repo with a higher floor passes `php-versions`.
