@@ -36,6 +36,19 @@ jobs:
         with:
           fetch-depth: 0  # the tag list is the version history
 
+      # A reusable workflow cannot use a composite action or script out of the caller's checkout, so it
+      # fetches its own repo at the ref the caller pinned.
+      - name: Check out the shared actions
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .gha
+          sparse-checkout: |
+            .github/actions/gh-release
+            scripts/retry.sh
+          sparse-checkout-cone-mode: false
+
       # A rerun after a release finds HEAD tagged, so the range is empty and nothing is released twice.
       - name: Pick the next version
         id: next
@@ -44,6 +57,7 @@ jobs:
           PREFIX: ${{ inputs.tag-prefix }}
         run: |
           set -euo pipefail
+          source .gha/scripts/retry.sh
           latest=""
           while IFS= read -r tag; do
             [[ $tag == "$PREFIX"* && ${tag#"$PREFIX"} =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || continue
@@ -54,7 +68,7 @@ jobs:
 
           labels=""
           for sha in $(git rev-list "$range"); do
-            labels+=$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/pulls" \
+            labels+=$(retry_run "$RETRY_GH_5XX" "5 15" gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/pulls" \
               --jq '.[0].labels[]?.name' 2> /dev/null || true)$'\n'
           done
 
@@ -82,7 +96,8 @@ jobs:
 
       - name: Tag and release
         if: inputs.create-release && steps.next.outputs.tag != ''
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          TAG: ${{ steps.next.outputs.tag }}
-        run: gh release create "$TAG" --target "$GITHUB_SHA" --title "$TAG" --generate-notes
+        uses: ./.gha/.github/actions/gh-release
+        with:
+          tag: ${{ steps.next.outputs.tag }}
+          target: ${{ github.sha }}
+          generate-notes: 'true'

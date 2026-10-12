@@ -31,6 +31,18 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
 
+      # A reusable workflow cannot use a composite action or script out of the caller's checkout, so it
+      # fetches its own repo at the ref the caller pinned.
+      - name: Check out the shared actions
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .gha
+          sparse-checkout: |
+            scripts/retry.sh
+          sparse-checkout-cone-mode: false
+
       - name: Set up PHP
         uses: shivammathur/setup-php@eb7c497e18156a6bbabfef1d3a82760b9eda3962  # 2.40.0
         with:
@@ -43,10 +55,19 @@ jobs:
         run: composer validate --strict
 
       - name: Install dependencies
-        run: composer install --no-progress --no-interaction
+        run: |
+          set -euo pipefail
+          source .gha/scripts/retry.sh
+          retry_run "$RETRY_NETWORK" 5 composer install --no-progress --no-interaction
 
       - name: Audit
-        run: composer audit
+        run: |
+          set -euo pipefail
+          source .gha/scripts/retry.sh
+          retry_run "$RETRY_NETWORK" 5 composer audit
+
+      - name: Drop the shared actions checkout
+        run: rm -rf .gha  # the composer scripts see the caller's checkout only
 
       - name: Run the composer scripts
         env:

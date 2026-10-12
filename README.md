@@ -465,6 +465,63 @@ piped to kubeconform, optional schema and README drift checks.
 | `schema` | `off`; `check` regenerates `values.schema.json` and fails on drift |
 | `docs` | `off`; `check` regenerates the README with helm-docs and fails on drift |
 
+### `actions/docker-build`
+
+`docker buildx build` with the flags `docker/build-push-action` passes for the same inputs. A
+registry rate limit or 5xx gets one more try after 5 s, which pulls of public base images need.
+Any other error fails at once. Needs `docker/setup-buildx-action` first. The shared docker
+workflows build through it.
+
+```yaml
+- uses: yama6a/gha/.github/actions/docker-build@v2
+  with:
+    platforms: linux/amd64,linux/arm64
+    push: true
+    tags: ghcr.io/owner/repo:1
+```
+
+| input | default |
+|---|---|
+| `context` | `.` |
+| `file` | none; `Dockerfile` in the context |
+| `platforms` | none; the builder's platform |
+| `build-args`, `tags`, `outputs` | none; one value per line |
+| `push`, `load` | `false` |
+| `provenance` | none; like `docker/build-push-action`, `mode=max` in a public repo, `mode=min,inline-only=true` in a private one, none on `load` |
+| `sbom` | none; `true` adds an SBOM attestation |
+| `hide-path` | none; a workspace path moved out of the build context during the build |
+
+Output `digest`, empty when nothing was pushed. The build summary and the build record artifact
+of `docker/build-push-action` do not exist here.
+
+### `actions/gh-release`
+
+`gh release create` with up to three tries on an HTTP 5xx, 5 s and 15 s apart. A failed create
+can leave a draft or even the finished release behind. Before each retry the action deletes the
+drafts with the same title and target that did not exist before the first try. When the release
+exists after all, it uploads only the missing files. The shared release workflows create their releases through it.
+
+```yaml
+- uses: yama6a/gha/.github/actions/gh-release@v2
+  with:
+    tag: ${{ needs.version.outputs.tag }}
+    target: ${{ github.sha }}
+    generate-notes: 'true'
+    files: |
+      app.phar
+```
+
+| input | default |
+|---|---|
+| `tag` | required |
+| `target` | required; a commit SHA or branch |
+| `title` | the tag |
+| `notes` | none; with `generate-notes` they come first |
+| `generate-notes` | `false` |
+| `files` | none; one path per line |
+| `repo` | the repo the workflow runs in |
+| `token` | `github.token` |
+
 ### `actions/release-label`
 
 Fails a PR that does not carry exactly one of the labels `major`, `minor`, `patch`,
@@ -506,6 +563,21 @@ check still reports green) unless a config file changed. Every other event valid
 | `extra-paths` | none; one glob per line |
 
 ## Scripts
+
+### `scripts/retry.sh`
+
+Sourced by the shared workflows and actions. `retry_run PATTERN WAITS COMMAND...` tries again
+only when the failed command's output matches `PATTERN`, so a real error fails on the first try.
+
+| pattern | matches | used by |
+|---|---|---|
+| `RETRY_RATE_LIMIT` | `toomanyrequests`, `429 Too Many Requests`, `Rate exceeded` | `actions/docker-build` |
+| `RETRY_REGISTRY_5XX` | `500 Internal Server Error` to `504 Gateway Timeout` | `actions/docker-build` |
+| `RETRY_GH_5XX` | `HTTP 5xx` from gh | `gh` calls in the release workflows, `actions/gh-release` |
+| `RETRY_NETWORK` | `curl error`, `HTTP/2 5xx`, a bare 500 to 504, `timed out` | `composer install` and `composer audit` in `php-ci.yaml` |
+
+`scripts/retry_test.sh` checks the patterns against the logs in `.github/testdata/retry` and
+runs `actions/gh-release` and `actions/docker-build` against a fake gh and docker.
 
 ### `scripts/repo-settings.sh`
 

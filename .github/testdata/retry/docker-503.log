@@ -1,0 +1,1 @@
+ERROR: failed to push ghcr.io/yama6a/subtitle-toolbox-php:ci-123: unexpected status from PUT request to https://ghcr.io/v2/yama6a/subtitle-toolbox-php/manifests/ci-123: 503 Service Unavailable

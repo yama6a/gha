@@ -21,7 +21,7 @@ on:
         type: string
         default: ''
       build-args:
-        description: Newline-separated KEY=VALUE pairs, passed straight to docker/build-push-action
+        description: Newline-separated KEY=VALUE pairs, one --build-arg each
         type: string
         default: ''
       create-release:
@@ -72,14 +72,12 @@ jobs:
           sparse-checkout: |
             .github/actions/hadolint
             .hadolint.yaml
+            scripts/retry.sh
           sparse-checkout-cone-mode: false
 
       - uses: ./.gha/.github/actions/hadolint
         with:
           dockerfiles: ${{ inputs.dockerfile }}
-
-      - name: Drop the shared actions checkout
-        run: rm -rf .gha  # it would otherwise be part of the build context
 
       - name: Determine the release version
         id: version
@@ -89,12 +87,13 @@ jobs:
           MOVING_TAGS: ${{ inputs.moving-tags }}
         run: |
           set -euo pipefail
+          source .gha/scripts/retry.sh
           if [ -n "$SUFFIX" ] && [[ ! $SUFFIX =~ ^-[a-z0-9][a-z0-9._-]*$ ]]; then
             echo "::error::tag-suffix must start with - and hold only a-z, 0-9, ., _ and -, got ${SUFFIX}"
             exit 1
           fi
           if [ -z "$VERSION" ]; then
-            latest=$(gh release list --limit 1 --json tagName --jq '.[0].tagName // "0"')
+            latest=$(retry_run "$RETRY_GH_5XX" "5 15" gh release list --limit 1 --json tagName --jq '.[0].tagName // "0"')
             VERSION=$((latest + 1))
             echo "Latest release: ${latest:-<none>} -> next: $VERSION"
           fi
@@ -110,6 +109,9 @@ jobs:
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tags=$tags" >> "$GITHUB_OUTPUT"
+
+      - name: Drop the shared actions checkout
+        run: rm -rf .gha  # the build command sees the caller's checkout only
 
       - name: Set up Node
         if: inputs.build-command != ''
@@ -151,12 +153,24 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
 
+      - name: Check out the shared build and release actions
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .gha
+          sparse-checkout: |
+            .github/actions/docker-build
+            .github/actions/gh-release
+            scripts/retry.sh
+          sparse-checkout-cone-mode: false
+
       # A two-platform QEMU build cannot --load a manifest list, so the scan runs against a pushed
       # temp tag and the release tag is a manifest copy of it afterwards.
       # No cache-from or cache-to. The GHA layer cache restored nothing slow in any caller, took up to
       # 229s to export, and filled the 10 GB Actions cache. Measurements: https://github.com/yama6a/gha/pull/51
       - name: Build and push the scan candidate
-        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc  # v7.4.0
+        uses: ./.gha/.github/actions/docker-build
         with:
           context: ${{ inputs.context }}
           file: ${{ inputs.dockerfile }}
@@ -166,6 +180,7 @@ jobs:
           provenance: mode=max
           sbom: true
           tags: ${{ env.IMAGE }}:${{ env.CI_TAG }}
+          hide-path: .gha  # it would otherwise be part of the build context
 
       # Report-only until every repo has a week of output to review and a .trivyignore for whatever
       # it decides to carry; enforcing is then a one-line change to exit-code.
@@ -217,11 +232,8 @@ jobs:
       # Only tag a release once the image has actually been pushed.
       - name: Create GitHub release
         if: inputs.create-release
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          VERSION: ${{ steps.version.outputs.version }}
-        run: |
-          gh release create "$VERSION" \
-            --target "${{ github.sha }}" \
-            --title "$VERSION" \
-            --notes "Image: ${IMAGE}:${VERSION}${SUFFIX}"
+        uses: ./.gha/.github/actions/gh-release
+        with:
+          tag: ${{ steps.version.outputs.version }}
+          target: ${{ github.sha }}
+          notes: 'Image: ${{ env.IMAGE }}:${{ steps.version.outputs.version }}${{ env.SUFFIX }}'

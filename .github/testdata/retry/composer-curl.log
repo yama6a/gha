@@ -1,0 +1,2 @@
+In CurlDownloader.php line 390:
+  curl error 28 while downloading https://repo.packagist.org/p2/symfony/console.json: Operation timed out after 10002 milliseconds with 0 bytes received

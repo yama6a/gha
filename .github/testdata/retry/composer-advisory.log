@@ -1,0 +1,6 @@
+Found 1 security vulnerability advisory affecting 1 package:
++-------------------+------------------------------------------------+
+| Package           | guzzlehttp/guzzle                              |
+| CVE               | CVE-2024-50012                                 |
+| Affected versions | >=7.0.0,<7.5.0                                 |
++-------------------+------------------------------------------------+

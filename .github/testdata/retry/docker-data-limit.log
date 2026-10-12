@@ -1,0 +1,1 @@
+ERROR: failed to solve: failed to resolve source metadata for public.ecr.aws/docker/library/php:8.4-cli: toomanyrequests: Data limit exceeded
