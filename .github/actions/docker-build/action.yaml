@@ -44,9 +44,9 @@ inputs:
     required: false
     default: ''
   sbom:
-    description: true adds an SBOM attestation
+    description: true adds an SBOM attestation, false passes an explicit disabled one
     required: false
-    default: 'false'
+    default: ''
   hide-path:
     description: >-
       Workspace path moved out of the build context while the build runs and put back after,
