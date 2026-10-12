@@ -1,0 +1,2 @@
+In CurlDownloader.php line 627:
+  The "https://repo.packagist.org/packages.json" file could not be downloaded (HTTP/2 502 )

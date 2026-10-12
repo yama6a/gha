@@ -1,0 +1,81 @@
+name: Docker build
+description: >-
+  Runs docker buildx build and runs it once more after 5 s when a registry answered with a
+  rate limit or a 5xx, which pulls of public base images hit often. Any other build error fails
+  at once. Needs docker/setup-buildx-action first. The inputs mirror docker/build-push-action.
+inputs:
+  context:
+    description: Build context path
+    required: false
+    default: .
+  file:
+    description: Dockerfile path; empty uses Dockerfile in the context
+    required: false
+    default: ''
+  platforms:
+    description: Comma-separated target platforms; empty builds for the builder's platform
+    required: false
+    default: ''
+  build-args:
+    description: Build arguments, one KEY=VALUE per line
+    required: false
+    default: ''
+  tags:
+    description: Image tags, one per line
+    required: false
+    default: ''
+  push:
+    description: true pushes the image
+    required: false
+    default: 'false'
+  load:
+    description: true loads the image into the runner's docker
+    required: false
+    default: 'false'
+  outputs:
+    description: Output destinations, one buildx --output value per line
+    required: false
+    default: ''
+  provenance:
+    description: >-
+      Provenance attestation attributes, for example mode=max. Empty applies the default of
+      docker/build-push-action: mode=max in a public repo, mode=min,inline-only=true in a
+      private one, none when the image is loaded into docker
+    required: false
+    default: ''
+  sbom:
+    description: true adds an SBOM attestation
+    required: false
+    default: 'false'
+  hide-path:
+    description: >-
+      Workspace path moved out of the build context while the build runs and put back after,
+      for a checkout of this repo inside the context
+    required: false
+    default: ''
+outputs:
+  digest:
+    description: Digest of the pushed image or manifest list, empty when nothing was pushed
+    value: ${{ steps.build.outputs.digest }}
+runs:
+  using: composite
+  steps:
+    - name: docker buildx build
+      id: build
+      shell: bash
+      env:
+        CONTEXT: ${{ inputs.context }}
+        FILE: ${{ inputs.file }}
+        PLATFORMS: ${{ inputs.platforms }}
+        BUILD_ARGS: ${{ inputs.build-args }}
+        TAGS: ${{ inputs.tags }}
+        PUSH: ${{ inputs.push }}
+        LOAD: ${{ inputs.load }}
+        OUTPUTS: ${{ inputs.outputs }}
+        PROVENANCE: ${{ inputs.provenance }}
+        SBOM: ${{ inputs.sbom }}
+        HIDE_PATH: ${{ inputs.hide-path }}
+        PRIVATE_REPO: ${{ github.event.repository.private }}
+        BUILDER_ID: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}/attempts/${{ github.run_attempt }}
+        BUILDX_METADATA_WARNINGS: 'true'
+      run: bash "$GITHUB_ACTION_PATH/build.sh"

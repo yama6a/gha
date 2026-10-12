@@ -98,7 +98,7 @@ jobs:
 
       - uses: ./.github/actions/shell-checks
         with:
-          paths: .github/testdata/shell/clean.sh scripts/*.sh
+          paths: .github/testdata/shell/clean.sh scripts/*.sh .github/actions/*/*.sh
 
       - name: the pinned shellcheck is the one on PATH
         run: |
@@ -135,5 +135,85 @@ jobs:
           set -uo pipefail
           if hadolint --config .hadolint.yaml .github/testdata/hadolint/Dockerfile.bad; then
             echo "::error::hadolint accepted the DL3003 and DL4006 fixture"
+            exit 1
+          fi
+
+  # The retry decision and the gh-release cleanup, against sample logs and a fake gh.
+  retry:
+    runs-on: ubuntu-26.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+      - run: scripts/retry_test.sh
+
+  # The release workflows read the digest output, and every caller relies on hide-path to keep
+  # the shared actions checkout out of its image.
+  docker-build:
+    runs-on: ubuntu-26.04-arm
+    services:
+      registry:
+        image: registry:3.1.2@sha256:ddf754342cfc8acc51a56d5d0ab6af06826461864460636d8bd5c546dab2a7b8
+        ports:
+          - 5000:5000
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
+        with:
+          driver-opts: network=host  # the builder container reaches the registry service on localhost
+
+      - name: Add a directory to hide
+        run: mkdir .github/testdata/docker-build/hidden && touch .github/testdata/docker-build/hidden/marker
+
+      - uses: ./.github/actions/docker-build
+        with:
+          context: .github/testdata/docker-build
+          file: .github/testdata/docker-build/Dockerfile
+          outputs: type=local,dest=${{ runner.temp }}/out
+          hide-path: .github/testdata/docker-build/hidden
+
+      - name: hide-path kept the directory out of the context and put it back
+        env:
+          OUT: ${{ runner.temp }}/out
+        run: |
+          set -euo pipefail
+          test -f "$OUT/Dockerfile"
+          if [ -e "$OUT/hidden" ]; then
+            echo "::error::the hidden directory was part of the build context"
+            exit 1
+          fi
+          test -f .github/testdata/docker-build/hidden/marker
+
+      - id: push
+        uses: ./.github/actions/docker-build
+        with:
+          context: .github/testdata/docker-build
+          file: .github/testdata/docker-build/Dockerfile
+          provenance: mode=max
+          sbom: true
+          outputs: type=image,name=localhost:5000/test,push-by-digest=true,name-canonical=true,push=true
+
+      - name: the digest output names the pushed image
+        env:
+          DIGEST: ${{ steps.push.outputs.digest }}
+        run: |
+          set -euo pipefail
+          [[ $DIGEST =~ ^sha256:[0-9a-f]{64}$ ]] || { echo "::error::bad digest '${DIGEST}'"; exit 1; }
+          docker buildx imagetools inspect "localhost:5000/test@${DIGEST}"
+
+      - id: broken
+        continue-on-error: true
+        uses: ./.github/actions/docker-build
+        with:
+          context: .github/testdata/docker-build
+          file: .github/testdata/docker-build/Dockerfile.broken
+
+      - name: a build error fails the action
+        env:
+          OUTCOME: ${{ steps.broken.outcome }}
+        run: |
+          set -euo pipefail
+          if [ "$OUTCOME" != failure ]; then
+            echo "::error::docker-build accepted a COPY of a missing file"
             exit 1
           fi

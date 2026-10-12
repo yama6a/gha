@@ -1,0 +1,51 @@
+name: GitHub release
+description: >-
+  Creates a GitHub release with gh release create and tries again on an HTTP 5xx. Before a
+  retry it deletes the draft a failed try left behind, and when the failed try published the
+  release after all, it uploads only the missing files instead of creating a second release.
+inputs:
+  tag:
+    description: Tag of the release; gh creates it at target when it does not exist
+    required: true
+  target:
+    description: Commit SHA or branch the tag points at
+    required: true
+  title:
+    description: Release title; empty uses the tag
+    required: false
+    default: ''
+  notes:
+    description: Release notes; with generate-notes they come before the generated ones
+    required: false
+    default: ''
+  generate-notes:
+    description: true adds the notes GitHub generates from the merged PRs
+    required: false
+    default: 'false'
+  files:
+    description: Files to attach, one path per line
+    required: false
+    default: ''
+  repo:
+    description: OWNER/REPO of the release; empty uses the repo the workflow runs in
+    required: false
+    default: ''
+  token:
+    description: Token with contents write on the repo
+    required: false
+    default: ${{ github.token }}
+runs:
+  using: composite
+  steps:
+    - name: gh release create
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        GH_REPO: ${{ inputs.repo || github.repository }}
+        TAG: ${{ inputs.tag }}
+        TARGET: ${{ inputs.target }}
+        TITLE: ${{ inputs.title }}
+        NOTES: ${{ inputs.notes }}
+        GENERATE_NOTES: ${{ inputs.generate-notes }}
+        FILES: ${{ inputs.files }}
+      run: bash "$GITHUB_ACTION_PATH/release.sh"

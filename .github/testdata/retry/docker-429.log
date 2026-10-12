@@ -1,0 +1,1 @@
+ERROR: failed to solve: failed to resolve source metadata for docker.io/library/php:8.4-cli: unexpected status from HEAD request to https://registry-1.docker.io/v2/library/php/manifests/8.4-cli: 429 Too Many Requests

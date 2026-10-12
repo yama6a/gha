@@ -1,0 +1,2 @@
+#12 [base 1/6] FROM public.ecr.aws/docker/library/php:8.4-cli
+ERROR: failed to solve: public.ecr.aws/docker/library/php:8.4-cli: failed to resolve source metadata for public.ecr.aws/docker/library/php:8.4-cli: toomanyrequests: Rate exceeded
