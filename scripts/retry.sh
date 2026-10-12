@@ -17,7 +17,8 @@ retry_matches() {
 # retry_capture LOG COMMAND... runs COMMAND once and appends its stdout and stderr to LOG.
 # Both streams also pass through unchanged, so a caller can still read stdout with $(...).
 retry_capture() {
-  local log=$1
+  local - log=$1
+  set -o pipefail
   shift
   { { "$@" | tee -a "$log"; } 2>&1 1>&3 | tee -a "$log" >&2; } 3>&1
 }

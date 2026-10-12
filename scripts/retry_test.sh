@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Tests for scripts/retry.sh and the gh-release action. Run from the repo root.
+# Tests for scripts/retry.sh and the docker-build and gh-release actions. Run from the repo root.
 set -euo pipefail
 
 # shellcheck source=scripts/retry.sh
@@ -63,8 +63,38 @@ run_case "build error fails at once" 5 docker-build-error.log 7 9 7 1
 run_case "rate limit on every try" 5 docker-429.log 1 9 1 2
 run_case "three tries on 5xx" "5 15" docker-503.log 1 9 1 3
 
-# A fake gh that keeps its releases in $STATE. SCENARIO picks what the first create does.
+if bash -ec 'source scripts/retry.sh; retry_capture "$(mktemp)" false; echo survived' > /dev/null 2>&1; then
+  fail "retry_capture: a failed command passed under bash -e without pipefail"
+fi
+
+# A fake docker that prints its arguments one per line, to check what build.sh passes.
 mkdir -p "$work/bin"
+cat > "$work/bin/docker" << 'DOCKER'
+#!/usr/bin/env bash
+printf '%s\n' "$@"
+DOCKER
+chmod +x "$work/bin/docker"
+builder=https://github.com/o/r/actions/runs/1/attempts/1
+build_case() {
+  local name=$1 want=$2
+  shift 2
+  if ! env PATH="$work/bin:$PATH" BUILDER_ID="$builder" "$@" bash .github/actions/docker-build/build.sh \
+    | grep -qxF -- "$want"; then
+    fail "docker-build $name: no argument $want"
+  fi
+}
+build_case "explicit provenance" "type=provenance,mode=max,builder-id=$builder" PROVENANCE=mode=max
+build_case "provenance true" "type=provenance,builder-id=$builder" PROVENANCE=true
+build_case "provenance false" "type=provenance,disabled=true" PROVENANCE=false
+build_case "default provenance, public repo" "type=provenance,mode=max,builder-id=$builder" PRIVATE_REPO=false
+build_case "default provenance, private repo" \
+  "type=provenance,mode=min,inline-only=true,builder-id=$builder" PRIVATE_REPO=true
+build_case "sbom" "type=sbom,disabled=false" SBOM=true
+if env PATH="$work/bin:$PATH" LOAD=true bash .github/actions/docker-build/build.sh | grep -q '^type=provenance'; then
+  fail "docker-build load: no default provenance with --load"
+fi
+
+# A fake gh that keeps its releases in $STATE. SCENARIO picks what the first create does.
 cat > "$work/bin/gh" << 'GH'
 #!/usr/bin/env bash
 set -euo pipefail
@@ -74,12 +104,13 @@ case "$1 $2" in
     case "$SCENARIO:$(grep -c '^release create' "$STATE/calls")" in
       draft:1)
         # What a 500 between creating the draft and uploading the first asset leaves behind.
-        echo '[{"id":101,"draft":true,"name":"7","target_commitish":"abc123","tag_name":"untagged-c1f81ffb6b70202c7e9b","assets":[]},
-               {"id":55,"draft":true,"name":"draft by hand","target_commitish":"abc123","tag_name":"untagged-1"}]' > "$STATE/releases"
+        jq '. + [{"id":101,"draft":true,"name":"7","target_commitish":"abc123","tag_name":"untagged-c1f81ffb6b70202c7e9b"}]' \
+          "$STATE/releases" > "$STATE/releases.new"
+        mv "$STATE/releases.new" "$STATE/releases"
         echo 'HTTP 500: Internal Server Error (https://api.github.com/repos/o/r/releases)' >&2
         exit 1
         ;;
-      published:1)
+      published:1 | uploadfail:1)
         touch "$STATE/published"
         echo 'HTTP 502: Bad Gateway (https://uploads.github.com/repos/o/r/releases/1/assets)' >&2
         exit 1
@@ -94,6 +125,12 @@ case "$1 $2" in
   "release view")
     if [ ! -f "$STATE/published" ]; then
       echo 'release not found' >&2
+      exit 1
+    fi
+    ;;
+  "release upload")
+    if [ "$SCENARIO" = uploadfail ]; then
+      echo 'HTTP 422: Validation Failed (https://uploads.github.com/repos/o/r/releases/1/assets)' >&2
       exit 1
     fi
     ;;
@@ -116,9 +153,14 @@ release_case() {
   if [ "$got_code" != "$want_code" ]; then fail "gh-release $scenario: exit code $got_code, want $want_code"; fi
 }
 
+# Draft 33 has the same title and target, but existed before the first try.
+mkdir -p "$work/draft"
+echo '[{"id":33,"draft":true,"name":"7","target_commitish":"abc123","tag_name":"untagged-2"},
+       {"id":55,"draft":true,"name":"draft by hand","target_commitish":"abc123","tag_name":"untagged-1"}]' \
+  > "$work/draft/releases"
 release_case draft 0
 if [ "$(grep -c '^release create' "$work/draft/calls")" != 2 ]; then fail "gh-release draft: want a second create"; fi
-if [ "$(jq -c 'map(.id)' "$work/draft/releases")" != '[55]' ]; then
+if [ "$(jq -c 'map(.id)' "$work/draft/releases")" != '[33,55]' ]; then
   fail "gh-release draft: want only draft 101 deleted, left $(jq -c 'map(.id)' "$work/draft/releases")"
 fi
 
@@ -128,8 +170,10 @@ if ! grep -qx "release upload 7 $work/app.phar --clobber" "$work/published/calls
   fail "gh-release published: the missing asset was not uploaded"
 fi
 
+release_case uploadfail 1
+
 release_case invalid 1
-if [ "$(wc -l < "$work/invalid/calls")" != 1 ]; then fail "gh-release invalid: a 422 must not be retried"; fi
+if [ "$(grep -c '^release create' "$work/invalid/calls")" != 1 ]; then fail "gh-release invalid: a 422 must not be retried"; fi
 
 if [ "$failures" -gt 0 ]; then
   echo "$failures failure(s)"

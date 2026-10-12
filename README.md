@@ -498,8 +498,8 @@ of `docker/build-push-action` do not exist here.
 
 `gh release create` with up to three tries on an HTTP 5xx, 5 s and 15 s apart. A failed create
 can leave a draft or even the finished release behind. Before each retry the action deletes the
-drafts with the same title and target, and when the release exists after all it uploads only the
-missing files. The shared release workflows create their releases through it.
+drafts with the same title and target that did not exist before the first try. When the release
+exists after all, it uploads only the missing files. The shared release workflows create their releases through it.
 
 ```yaml
 - uses: yama6a/gha/.github/actions/gh-release@v2
@@ -577,7 +577,7 @@ only when the failed command's output matches `PATTERN`, so a real error fails o
 | `RETRY_NETWORK` | `curl error`, `HTTP/2 5xx`, a bare 500 to 504, `timed out` | `composer install` and `composer audit` in `php-ci.yaml` |
 
 `scripts/retry_test.sh` checks the patterns against the logs in `.github/testdata/retry` and
-runs `actions/gh-release` against a fake gh.
+runs `actions/gh-release` and `actions/docker-build` against a fake gh and docker.
 
 ### `scripts/repo-settings.sh`
 

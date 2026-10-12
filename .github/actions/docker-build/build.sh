@@ -26,16 +26,23 @@ main() {
   while IFS= read -r line; do args+=(--tag "$line"); done < <(lines "${TAGS:-}")
   while IFS= read -r line; do args+=(--output "$line"); done < <(lines "${OUTPUTS:-}")
 
-  if [ -n "${PROVENANCE:-}" ]; then
-    args+=(--attest "type=provenance,${PROVENANCE}")
-  elif [ "${LOAD:-false}" != true ] && ! grep -q 'type=docker' <<< "${OUTPUTS:-}"; then
-    # The default of docker/build-push-action, which buildx alone does not apply.
-    if [ "${PRIVATE_REPO:-false}" = true ]; then
-      args+=(--attest "type=provenance,mode=min,inline-only=true,builder-id=${BUILDER_ID}")
-    else
-      args+=(--attest "type=provenance,mode=max,builder-id=${BUILDER_ID}")
-    fi
-  fi
+  # The provenance docker/build-push-action passes: its default when the input is empty, and
+  # the builder-id it adds to an explicit value, so the release provenance stays the same.
+  case "${PROVENANCE:-}" in
+    '')
+      if [ "${LOAD:-false}" != true ] && ! grep -q 'type=docker' <<< "${OUTPUTS:-}"; then
+        if [ "${PRIVATE_REPO:-false}" = true ]; then
+          args+=(--attest "type=provenance,mode=min,inline-only=true,builder-id=${BUILDER_ID}")
+        else
+          args+=(--attest "type=provenance,mode=max,builder-id=${BUILDER_ID}")
+        fi
+      fi
+      ;;
+    true | True | TRUE) args+=(--attest "type=provenance,builder-id=${BUILDER_ID}") ;;
+    false | False | FALSE) args+=(--attest 'type=provenance,disabled=true') ;;
+    *builder-id=*) args+=(--attest "type=provenance,${PROVENANCE}") ;;
+    *) args+=(--attest "type=provenance,${PROVENANCE},builder-id=${BUILDER_ID}") ;;
+  esac
   case "${SBOM:-}" in
     '') ;;
     true) args+=(--attest 'type=sbom,disabled=false') ;;

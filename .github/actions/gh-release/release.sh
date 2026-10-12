@@ -20,29 +20,39 @@ if [ "${GENERATE_NOTES:-false}" = true ]; then args+=(--generate-notes); fi
 
 # gh uploads assets to a draft and publishes it last. A draft carries an untagged-* tag name,
 # so gh release view TAG cannot find it, and the only match left is its name and target.
-delete_drafts() {
-  local releases id
+matching_drafts() {
+  local releases
   releases=$(retry_run "$RETRY_GH_5XX" "5 15" gh api --paginate "repos/${GH_REPO}/releases")
-  for id in $(jq -r --arg name "$title" --arg target "$TARGET" \
-    '.[] | select(.draft and .name == $name and .target_commitish == $target) | .id' <<< "$releases"); do
+  jq -r --arg name "$title" --arg target "$TARGET" \
+    '.[] | select(.draft and .name == $name and .target_commitish == $target) | .id' <<< "$releases"
+}
+
+# Deletes only the drafts that did not exist before the first try, so a draft made by hand stays.
+delete_new_drafts() {
+  local ids id
+  ids=$(matching_drafts)
+  for id in $ids; do
+    if grep -qx -- "$id" <<< "$drafts_before"; then continue; fi
     echo "deleting draft release $id left by the failed try"
     retry_run "$RETRY_GH_5XX" "5 15" gh api -X DELETE "repos/${GH_REPO}/releases/${id}"
   done
 }
 
 # Succeeds when the failed try still published the release, after uploading what it lacks.
+# It runs as an if condition, where set -e is off, so every failure exits explicitly.
 finish_published() {
   local assets file missing=()
   assets=$(retry_run "$RETRY_GH_5XX" "5 15" gh release view "$TAG" --json assets --jq '.assets[].name') || return 1
   for file in "${files[@]}"; do
-    if ! grep -qxF -- "$(basename "$file")" <<< "$assets"; then missing+=("$file"); fi
+    if ! grep -qxF -- "${file##*/}" <<< "$assets"; then missing+=("$file"); fi
   done
   if [ "${#missing[@]}" -gt 0 ]; then
-    retry_run "$RETRY_GH_5XX" "5 15" gh release upload "$TAG" "${missing[@]}" --clobber
+    retry_run "$RETRY_GH_5XX" "5 15" gh release upload "$TAG" "${missing[@]}" --clobber || exit $?
   fi
   echo "release $TAG exists, created by the failed try"
 }
 
+drafts_before=$(matching_drafts)
 log=$(mktemp)
 trap 'rm -f "$log"' EXIT
 for wait in 5 15 ''; do
@@ -53,6 +63,6 @@ for wait in 5 15 ''; do
   if [ -z "$wait" ] || ! retry_matches "$RETRY_GH_5XX" "$log"; then exit "$code"; fi
   echo "::warning::gh release create failed with a transient error, trying again in ${wait}s" >&2
   sleep "$wait"
-  delete_drafts
+  delete_new_drafts
   if finish_published; then exit 0; fi
 done
