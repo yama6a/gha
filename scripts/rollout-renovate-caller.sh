@@ -20,6 +20,7 @@ pontiki-website             | main   |
 praxis                      | main   |
 smartctl-exporter-multiarch | main   |
 subtitle-toolbox            | master |
+subtitle-toolbox-go         | main   |
 talos-raspberry-pi5         | main   |
 talos-raspberry-pi5-cluster | main   |
 '
