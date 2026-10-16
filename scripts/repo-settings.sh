@@ -23,6 +23,7 @@ praxis                      | main   | false | private | node / node,renovate-co
 smartctl-exporter-multiarch | main   | false | public  | shell,docker,yaml,renovate-config
 subtitle-toolbox            | master | false | public  | release label,php / php,phar,docker / docker,docker-tesseract / docker,tesseract,yaml,renovate-config
 subtitle-toolbox-go         | main   | false | public  | release label,version check,go / go,cross-compile,fuzz,bench,smoke,docker / docker,shell,yaml,renovate-config
+tales-ingest                | main   | false | private | go / go,coverage,cross-compile,docker / docker,shell,yaml,renovate-config
 talos-raspberry-pi5         | main   | false | public  | shell,yaml,renovate-config,main-is-green
 talos-raspberry-pi5-cluster | main   | false | public  | shell,yaml,renovate-config
 '
