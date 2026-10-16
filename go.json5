@@ -28,6 +28,22 @@
       "matchDepTypes": ["indirect"],
       "matchUpdateTypes": ["major"],
       "enabled": false
+    },
+    {
+      // openapi v1.26.0 moved to go.yaml.in/yaml/v3, but oapi-codegen v2.8.0 still passes it
+      // gopkg.in/yaml.v3 nodes, so `go generate` stops compiling. Lift once an oapi-codegen release builds with it.
+      "description": "hold speakeasy-api/openapi below v1.26.0 until oapi-codegen supports it",
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["github.com/speakeasy-api/openapi"],
+      "allowedVersions": "<1.26.0"
+    },
+    {
+      // jsonpath v0.7.0 requires an openapi pre-release past v1.25.6 that already uses the new YAML package.
+      // Lift together with the openapi hold above.
+      "description": "hold speakeasy-api/jsonpath below v0.7.0, or it drags openapi past the hold above",
+      "matchManagers": ["gomod"],
+      "matchPackageNames": ["github.com/speakeasy-api/jsonpath"],
+      "allowedVersions": "<0.7.0"
     }
   ]
 }
