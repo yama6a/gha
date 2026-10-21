@@ -3,7 +3,7 @@
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
   "packageRules": [
     {
-      // Raising the PHP floor drops users, so it is a release decision and never a bot update.
+      // The floor is the oldest PHP version with security support on php.net. Renovate cannot read that date.
       "description": "the php constraint in composer.json is set by hand",
       "matchManagers": ["composer"],
       "matchPackageNames": ["php"],
