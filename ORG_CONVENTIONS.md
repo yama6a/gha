@@ -53,7 +53,8 @@ them report on a PR, so the PR sits pending forever.
 - tool dependencies: Go 1.24 `tool` directives in `go.mod`. No `tools.go`.
 - logging: zap, typed fields. The logger is an unexported struct field or the last constructor
   param, never a package global. `zap.NewNop()` in tests.
-- tests: testify, and testcontainers for anything that talks to a database.
+- tests: testify, and `github.com/yama6a/pgsandbox` for anything that talks to Postgres: one
+  container per test process, a migrated template database, a clone per test.
 - image: `.build/Dockerfile`, `gcr.io/distroless/static:nonroot`. A binary that needs an OS
   (shelling out, glibc, CA tooling) uses debian-slim or alpine, digest-pinned.
 
