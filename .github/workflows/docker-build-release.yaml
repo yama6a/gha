@@ -29,7 +29,7 @@ on:
         type: boolean
         default: true
       moving-tags:
-        description: Also point the MAJOR.MINOR, MAJOR and latest tags at the release; needs a MAJOR.MINOR.PATCH version
+        description: Also point the MAJOR.MINOR and MAJOR tags at the release; needs a MAJOR.MINOR.PATCH version
         type: boolean
         default: false
       tag-suffix:
@@ -97,15 +97,15 @@ jobs:
             VERSION=$((latest + 1))
             echo "Latest release: ${latest:-<none>} -> next: $VERSION"
           fi
-          tags="${VERSION}${SUFFIX}"
+          latest=${SUFFIX:-latest}
+          tags="${VERSION}${SUFFIX} ${latest#-}"
           if [ "$MOVING_TAGS" = true ]; then
             # Checked before the build, so a bad version fails in seconds and pushes nothing.
             if [[ ! $VERSION =~ ^([0-9]+)\.([0-9]+)\.[0-9]+$ ]]; then
               echo "::error::moving-tags needs a MAJOR.MINOR.PATCH version, got ${VERSION}"
               exit 1
             fi
-            latest=${SUFFIX:-latest}
-            tags+=" ${BASH_REMATCH[1]}.${BASH_REMATCH[2]}${SUFFIX} ${BASH_REMATCH[1]}${SUFFIX} ${latest#-}"
+            tags+=" ${BASH_REMATCH[1]}.${BASH_REMATCH[2]}${SUFFIX} ${BASH_REMATCH[1]}${SUFFIX}"
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "tags=$tags" >> "$GITHUB_OUTPUT"

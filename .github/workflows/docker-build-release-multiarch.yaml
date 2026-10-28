@@ -235,6 +235,12 @@ jobs:
             grep -qx "$p" /tmp/have || { echo "::error::${p} missing from the manifest"; exit 1; }
           done
 
+      # After the platform check, so latest never points at a manifest that lacks a platform.
+      - name: Point latest at the release
+        env:
+          VERSION: ${{ needs.version.outputs.version }}
+        run: docker buildx imagetools create -t "${IMAGE}:latest" "${IMAGE}:${VERSION}"
+
       - name: Read the released digest
         id: released
         env:

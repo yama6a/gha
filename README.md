@@ -183,10 +183,10 @@ All four permissions are required; a reusable job gets only what the caller gran
 | `build-args` | none; newline `KEY=VALUE` |
 | `version` | none; use this string instead of the integer counter |
 | `create-release` | `true`; `false` when the caller publishes more artifacts and tags itself |
-| `moving-tags` | `false`; `true` also tags `1.2`, `1` and `latest` for version `1.2.3` |
-| `tag-suffix` | none; `-tesseract` tags `1.2.3-tesseract`, and with `moving-tags` also `1.2-tesseract`, `1-tesseract` and `tesseract` |
+| `moving-tags` | `false`; `true` also tags `1.2` and `1` for version `1.2.3` |
+| `tag-suffix` | none; `-tesseract` tags `1.2.3-tesseract` and `tesseract`, and with `moving-tags` also `1.2-tesseract` and `1-tesseract` |
 
-`moving-tags` moves `latest` to every release, so use it only where releases come from one branch.
+Every release moves `latest`, or the bare suffix with `tag-suffix`. Call the workflow from one branch only.
 Two calls with different `tag-suffix` values publish two images of one release, for example a full and a slim one.
 
 ### `docker-build-check.yaml`
@@ -217,6 +217,7 @@ jobs:
 Same result, one native runner per architecture, for a build that cannot run under QEMU. Same
 caller permissions. Inputs: `dockerfile`, `context`, `build-args`, `version`, and `platforms` as a
 JSON array of `{platform, runner}` (default amd64 on `ubuntu-latest`, arm64 on `ubuntu-24.04-arm`).
+Every release also moves `latest`.
 
 ### `go-release.yaml`
 
