@@ -217,7 +217,8 @@ jobs:
 Same result, one native runner per architecture, for a build that cannot run under QEMU. Same
 caller permissions. Inputs: `dockerfile`, `context`, `build-args`, `version`, and `platforms` as a
 JSON array of `{platform, runner}` (default amd64 on `ubuntu-latest`, arm64 on `ubuntu-24.04-arm`).
-Every release also moves `latest`.
+Every release also moves `latest`. `registry-cache: true` keeps a layer cache per architecture in
+the image's GHCR package, under the tag `buildcache-<os>-<arch>`.
 
 ### `go-release.yaml`
 

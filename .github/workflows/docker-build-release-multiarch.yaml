@@ -30,6 +30,10 @@ on:
         description: Comma-separated image paths the scanner skips entirely, for directories whose contents are already public
         type: string
         default: ''
+      registry-cache:
+        description: true keeps a layer cache per architecture in the image's GHCR package, under the tag buildcache-<os>-<arch>
+        type: boolean
+        default: false
     outputs:
       version:
         description: The release version that was built and pushed
@@ -125,8 +129,10 @@ jobs:
             scripts/retry.sh
           sparse-checkout-cone-mode: false
 
-      # No cache-from or cache-to. The GHA layer cache restored nothing slow in any caller, took up to
-      # 229s to export, and filled the 10 GB Actions cache. Measurements: https://github.com/yama6a/gha/pull/51
+      # Off by default. The GHA layer cache restored nothing slow in any caller, took up to 229s to
+      # export, and filled the 10 GB Actions cache: https://github.com/yama6a/gha/pull/51. The registry
+      # cache is for a build whose slow stages sit above the steps that change on most releases.
+      # mode=max, because min keeps only the final stage and drops every intermediate one.
       - name: Build and push by digest
         id: build
         uses: ./.gha/.github/actions/docker-build
@@ -138,6 +144,8 @@ jobs:
           provenance: mode=max
           sbom: true
           outputs: type=image,name=${{ env.IMAGE }},push-by-digest=true,name-canonical=true,push=true
+          cache-from: ${{ inputs.registry-cache && format('type=registry,ref={0}:buildcache-{1}', env.IMAGE, env.PLATFORM_PAIR) || '' }}
+          cache-to: ${{ inputs.registry-cache && format('type=registry,ref={0}:buildcache-{1},mode=max,ignore-error=true', env.IMAGE, env.PLATFORM_PAIR) || '' }}
           hide-path: .gha  # it would otherwise be part of the build context
 
       # Each arch is scanned on its own native runner, before merge joins the digests. Report-only

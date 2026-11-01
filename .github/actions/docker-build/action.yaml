@@ -36,6 +36,14 @@ inputs:
     description: Output destinations, one buildx --output value per line
     required: false
     default: ''
+  cache-from:
+    description: Cache sources, one buildx --cache-from value per line
+    required: false
+    default: ''
+  cache-to:
+    description: Cache destinations, one buildx --cache-to value per line
+    required: false
+    default: ''
   provenance:
     description: >-
       Provenance attestation attributes, for example mode=max. Empty applies the default of
@@ -72,6 +80,8 @@ runs:
         PUSH: ${{ inputs.push }}
         LOAD: ${{ inputs.load }}
         OUTPUTS: ${{ inputs.outputs }}
+        CACHE_FROM: ${{ inputs.cache-from }}
+        CACHE_TO: ${{ inputs.cache-to }}
         PROVENANCE: ${{ inputs.provenance }}
         SBOM: ${{ inputs.sbom }}
         HIDE_PATH: ${{ inputs.hide-path }}
