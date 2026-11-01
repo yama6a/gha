@@ -25,6 +25,8 @@ main() {
   while IFS= read -r line; do args+=(--build-arg "$line"); done < <(lines "${BUILD_ARGS:-}")
   while IFS= read -r line; do args+=(--tag "$line"); done < <(lines "${TAGS:-}")
   while IFS= read -r line; do args+=(--output "$line"); done < <(lines "${OUTPUTS:-}")
+  while IFS= read -r line; do args+=(--cache-from "$line"); done < <(lines "${CACHE_FROM:-}")
+  while IFS= read -r line; do args+=(--cache-to "$line"); done < <(lines "${CACHE_TO:-}")
 
   # The provenance docker/build-push-action passes: its default when the input is empty, and
   # the builder-id it adds to an explicit value, so the release provenance stays the same.
