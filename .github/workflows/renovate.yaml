@@ -38,6 +38,8 @@ jobs:
     runs-on: ubuntu-26.04-arm
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: restore renovate cache
         id: cache
@@ -116,6 +118,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
+          persist-credentials: false
           ref: refs/pull/${{ matrix.pr }}/head
           fetch-depth: 0
 
@@ -124,10 +127,14 @@ jobs:
       - name: Fetch the BC check action
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
+          persist-credentials: false
           repository: ${{ job.workflow_repository }}
           ref: ${{ job.workflow_sha }}
           path: .gha
-          sparse-checkout: .github/actions/renovate-bc-check
+          sparse-checkout: |
+            .github/actions/renovate-bc-check
+            scripts/retry.sh
+          sparse-checkout-cone-mode: false  # cone mode selects directories, not single files
 
       - uses: ./.gha/.github/actions/renovate-bc-check
         with:

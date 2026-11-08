@@ -28,19 +28,30 @@ runs:
           echo "verdicted=true" >> "$GITHUB_OUTPUT"
         fi
 
-    - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
-      if: steps.head.outputs.verdicted != 'true'
-      with:
-        node-version: 24
-
+    # The release binary carries its own runtime, so the install needs no npm and no Node.
     - name: Install Copilot CLI
       if: steps.head.outputs.verdicted != 'true'
+      id: copilot
       shell: bash
       env:
-        COPILOT_VERSION: 1.0.107
+        COPILOT_VERSION: v1.0.107
+        GH_TOKEN: ${{ github.token }}
+        RETRY_SH: ${{ github.action_path }}/../../../scripts/retry.sh
       run: |
         set -euo pipefail
-        npm install -g "@github/copilot@$COPILOT_VERSION"
+        source "$RETRY_SH"
+        case "$(uname -m)" in
+          aarch64) arch=arm64 ;;
+          x86_64) arch=x64 ;;
+          *) echo "::error::unsupported runner architecture $(uname -m)" && exit 1 ;;
+        esac
+        tarball="copilot-linux-${arch}.tar.gz"
+        dir="$(mktemp -d)"
+        retry_release_download github/copilot-cli "$COPILOT_VERSION" "$dir" "$tarball" SHA256SUMS.txt
+        (cd "$dir" && sha256sum --check --ignore-missing SHA256SUMS.txt)
+        tar -xzf "$dir/$tarball" -C "$dir" copilot
+        "$dir/copilot" --version
+        echo "dir=$dir" >> "$GITHUB_OUTPUT"
 
     - name: Review the bump
       if: steps.head.outputs.verdicted != 'true'
@@ -51,6 +62,7 @@ runs:
         GH_TOKEN: ${{ inputs.token }}
         # Copilot CLI reads COPILOT_GITHUB_TOKEN before GH_TOKEN and rejects the classic PAT in GH_TOKEN.
         COPILOT_GITHUB_TOKEN: ${{ github.token }}
+        DIR: ${{ steps.copilot.outputs.dir }}
       run: |
         set -euo pipefail
         gh pr view "$PR" --repo "$GITHUB_REPOSITORY" --json title,body,labels > /tmp/pr.json
@@ -147,7 +159,7 @@ runs:
         )
 
         # A crashed or timed-out Copilot is an UNKNOWN, not a failed job: the PR stays open either way.
-        copilot -p "$prompt" -s --no-ask-user \
+        "$DIR/copilot" -p "$prompt" -s --no-ask-user \
           --allow-tool='shell(gh:*)' --allow-tool='shell(git:*)' > /tmp/review.md \
           || echo "::warning::copilot exited $? on PR #$PR"
 

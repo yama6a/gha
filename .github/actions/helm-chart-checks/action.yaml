@@ -34,36 +34,50 @@ runs:
       with:
         version: ${{ inputs.helm-version }}
 
+    # The release tarballs hold plugin.yaml and the binary. Extracting them skips the git clone and the
+    # install hooks that helm plugin install runs, and those fetch from GitHub without a token.
     - name: install helm plugins
       shell: bash
       env:
+        GH_TOKEN: ${{ github.token }}
+        RETRY_SH: ${{ github.action_path }}/../../../scripts/retry.sh
         SCHEMA: ${{ inputs.schema }}
       run: |
         set -euo pipefail
-        verify=()
-        # helm 4 refuses an unsigned plugin source unless verification is waived; helm 3 has no such flag.
-        # Captured rather than piped into grep -q: under pipefail, grep exiting early can SIGPIPE helm
-        # and turn a match into a non-zero pipeline.
-        help_text="$(helm plugin install --help 2>&1 || true)"
-        case "$help_text" in *--verify*) verify=(--verify=false) ;; esac
-        # a second call of this action in the same job would otherwise die on "plugin already exists"
-        install() { helm plugin list | grep -q "^$1[[:space:]]" || helm plugin install "$2" --version "$3" "${verify[@]}"; }
-        install unittest https://github.com/helm-unittest/helm-unittest v1.1.2
+        source "$RETRY_SH"
+        arch="$(dpkg --print-architecture)"
+        plugins="$(helm env HELM_PLUGINS)"
+        dir="$(mktemp -d)"
+        # install NAME REPO TAG ASSET. A second call of this action in the same job finds the plugin
+        # already there and skips it.
+        install() {
+          if helm plugin list | grep -q "^$1[[:space:]]"; then return; fi
+          retry_release_download "$2" "$3" "$dir" "$4"
+          mkdir -p "$plugins/$1"
+          tar -xzf "$dir/$4" -C "$plugins/$1"
+        }
+        install unittest helm-unittest/helm-unittest v1.1.2 "helm-unittest-linux-${arch}-1.1.2.tgz"
         if [ "$SCHEMA" = check ]; then
-          install schema https://github.com/losisin/helm-values-schema-json v2.6.0
+          install schema losisin/helm-values-schema-json v2.6.0 "helm-values-schema-json_2.6.0_linux_${arch}.tgz"
         fi
         helm plugin list
 
     - name: install helm-docs
       if: inputs.docs == 'check'
       shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RETRY_SH: ${{ github.action_path }}/../../../scripts/retry.sh
       run: |
         set -euo pipefail
+        source "$RETRY_SH"
         arch="$(dpkg --print-architecture)"
         if [ "$arch" = amd64 ]; then arch=x86_64; fi
-        curl -fsSL "https://github.com/norwoodj/helm-docs/releases/download/v1.14.2/helm-docs_1.14.2_Linux_${arch}.tar.gz" \
-          | tar xz helm-docs
-        sudo mv helm-docs /usr/local/bin/
+        tarball="helm-docs_1.14.2_Linux_${arch}.tar.gz"
+        dir="$(mktemp -d)"
+        retry_release_download norwoodj/helm-docs v1.14.2 "$dir" "$tarball"
+        tar -xzf "$dir/$tarball" -C "$dir" helm-docs
+        sudo mv "$dir/helm-docs" /usr/local/bin/
         helm-docs --version
 
     # Install only; the loop below pipes each rendered chart in on stdin and needs KUBECONFORM_ARGS.

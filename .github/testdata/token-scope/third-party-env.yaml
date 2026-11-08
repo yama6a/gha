@@ -1,0 +1,8 @@
+on: push
+jobs:
+  build:
+    runs-on: ubuntu-26.04-arm
+    steps:
+      - uses: some-owner/some-action/sub@v1
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}

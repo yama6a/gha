@@ -30,6 +30,8 @@ jobs:
         working-directory: ${{ inputs.working-directory }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       # No cache: here. The explicit cache below shares its key with playwright-e2e.yaml so both
       # hit one warmed entry; setup-node's built-in key is its own format and would miss it.
@@ -88,11 +90,17 @@ jobs:
       - name: Fetch the audit script
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
+          persist-credentials: false
           repository: ${{ job.workflow_repository }}
           ref: ${{ job.workflow_sha }}
           path: .gha
-          sparse-checkout: scripts/npm-audit.sh
+          sparse-checkout: |
+            .github/actions/workflow-security
+            scripts/npm-audit.sh
           sparse-checkout-cone-mode: false  # cone mode selects directories, not single files
+
+      - name: Check workflow security
+        uses: ./.gha/.github/actions/workflow-security
 
       - name: Stage the audit script
         run: |
@@ -104,9 +112,13 @@ jobs:
       - name: Audit
         run: /tmp/npm-audit.sh
 
-      - name: Set build env
-        if: inputs.build-env != ''
-        run: echo "${{ inputs.build-env }}" >> "$GITHUB_ENV"
-
+      # The pairs reach the build step only. export keeps each value as written, with no shell
+      # expansion.
       - name: Build
-        run: npm run build
+        env:
+          BUILD_ENV: ${{ inputs.build-env }}
+        run: |
+          while IFS= read -r pair; do
+            if [ -n "$pair" ]; then export "${pair?}"; fi
+          done <<< "$BUILD_ENV"
+          npm run build

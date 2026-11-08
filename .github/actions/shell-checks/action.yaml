@@ -17,23 +17,32 @@ runs:
     # would otherwise red-light six repos at once.
     - name: install shellcheck and shfmt
       shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RETRY_SH: ${{ github.action_path }}/../../../scripts/retry.sh
       run: |
         set -euo pipefail
+        source "$RETRY_SH"
         case "$(uname -m)" in
           aarch64) sc_arch=aarch64 shfmt_arch=arm64 ;;
           x86_64) sc_arch=x86_64 shfmt_arch=amd64 ;;
           *) echo "::error::unsupported runner architecture $(uname -m)" && exit 1 ;;
         esac
         dir="$(mktemp -d)"
-        curl -fsSL "https://github.com/koalaman/shellcheck/releases/download/v0.10.0/shellcheck-v0.10.0.linux.${sc_arch}.tar.xz" \
-          | tar -xJ -C "$dir" --strip-components=1 "shellcheck-v0.10.0/shellcheck"
-        curl -fsSL -o "$dir/shfmt" "https://github.com/mvdan/sh/releases/download/v3.10.0/shfmt_v3.10.0_linux_${shfmt_arch}"
+        sc_tarball="shellcheck-v0.10.0.linux.${sc_arch}.tar.xz"
+        retry_release_download koalaman/shellcheck v0.10.0 "$dir" "$sc_tarball"
+        tar -xJf "$dir/$sc_tarball" -C "$dir" --strip-components=1 "shellcheck-v0.10.0/shellcheck"
+        rm "$dir/$sc_tarball"
+        retry_release_download mvdan/sh v3.10.0 "$dir" "shfmt_v3.10.0_linux_${shfmt_arch}"
+        mv "$dir/shfmt_v3.10.0_linux_${shfmt_arch}" "$dir/shfmt"
         chmod +x "$dir/shfmt"
-        echo "$dir" >> "$GITHUB_PATH"
-        "$dir/shellcheck" --version
-        "$dir/shfmt" --version
+        # /usr/local/bin comes before /usr/bin on PATH, so the pinned shellcheck wins over the image's.
+        sudo ln -sf "$dir/shellcheck" "$dir/shfmt" /usr/local/bin/
+        shellcheck --version
+        shfmt --version
 
     - name: resolve paths
+      id: paths
       shell: bash
       env:
         PATHS: ${{ inputs.paths }}
@@ -56,15 +65,17 @@ runs:
               esac
             done | LC_ALL=C sort > "$list"
         fi
-        echo "SHELL_CHECK_LIST=$list" >> "$GITHUB_ENV"
+        echo "list=$list" >> "$GITHUB_OUTPUT"
         echo "checking $(wc -l < "$list") file(s)"
         cat "$list"
 
     - name: shellcheck
       shell: bash
+      env:
+        LIST: ${{ steps.paths.outputs.list }}
       run: |
         set -euo pipefail
-        mapfile -t files < "$SHELL_CHECK_LIST"
+        mapfile -t files < "$LIST"
         if [ "${#files[@]}" -eq 0 ]; then exit 0; fi
         shellcheck "${files[@]}"
 
@@ -72,8 +83,10 @@ runs:
     # on the command line turns that lookup off, so a stray .editorconfig cannot move CI.
     - name: shfmt
       shell: bash
+      env:
+        LIST: ${{ steps.paths.outputs.list }}
       run: |
         set -euo pipefail
-        mapfile -t files < "$SHELL_CHECK_LIST"
+        mapfile -t files < "$LIST"
         if [ "${#files[@]}" -eq 0 ]; then exit 0; fi
         shfmt -d -i 2 -ci -bn -sr "${files[@]}"

@@ -54,12 +54,15 @@ jobs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       # A reusable workflow cannot use a composite action out of the caller's checkout, so it
       # fetches its own repo at the ref the caller pinned.
       - name: Check out the shared actions
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
+          persist-credentials: false
           repository: ${{ job.workflow_repository }}
           ref: ${{ job.workflow_sha }}
           path: .gha
@@ -102,6 +105,8 @@ jobs:
       packages: write  # required to push by digest, or the image push fails with permission_denied
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Derive a filename-safe platform tag
         run: echo "PLATFORM_PAIR=${platform//\//-}" >> "$GITHUB_ENV"
@@ -121,6 +126,7 @@ jobs:
       - name: Check out the shared build and scan actions
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
+          persist-credentials: false
           repository: ${{ job.workflow_repository }}
           ref: ${{ job.workflow_sha }}
           path: .gha
@@ -152,10 +158,10 @@ jobs:
       # Each arch is scanned on its own native runner, before merge joins the digests. merge needs
       # build, so a red scan blocks the manifest.
       - name: Scan the image
+        # Trivy pulls a private image with the ghcr.io login from "Log in to GHCR". It reads that
+        # login from the Docker config for ghcr.io only, so the token never reaches its DB mirrors.
         uses: ./.gha/.github/actions/trivy-scan
         env:
-          TRIVY_USERNAME: ${{ github.actor }}  # trivy pulls the image itself, and a private repo's needs a login
-          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           # The per-arch push is an index (image + attestation), and trivy picks linux/amd64 out of
           # an index unless told otherwise, so the arm64 leg fails with "no child with platform".
           TRIVY_PLATFORM: ${{ matrix.platform }}
@@ -192,6 +198,7 @@ jobs:
       - name: Check out the shared release action
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
+          persist-credentials: false
           repository: ${{ job.workflow_repository }}
           ref: ${{ job.workflow_sha }}
           path: .gha

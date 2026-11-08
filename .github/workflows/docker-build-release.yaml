@@ -60,12 +60,15 @@ jobs:
       version: ${{ steps.version.outputs.version }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       # A reusable workflow cannot use a composite action out of the caller's checkout, so it
       # fetches its own repo at the ref the caller pinned.
       - name: Check out the shared actions
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
+          persist-credentials: false
           repository: ${{ job.workflow_repository }}
           ref: ${{ job.workflow_sha }}
           path: .gha
@@ -133,7 +136,8 @@ jobs:
       # runner instead of once per target arch under emulation.
       - name: Run build command
         if: inputs.build-command != ''
-        run: ${{ inputs.build-command }}
+        # The input is a shell command by contract, so it has to run as code.
+        run: ${{ inputs.build-command }}  # zizmor: ignore[template-injection] the caller writes this command
 
       # Same guard as the restore: its outputs are empty when it was skipped.
       - name: Save the npm store
@@ -156,6 +160,7 @@ jobs:
       - name: Check out the shared build, scan and release actions
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
+          persist-credentials: false
           repository: ${{ job.workflow_repository }}
           ref: ${{ job.workflow_sha }}
           path: .gha
@@ -184,10 +189,9 @@ jobs:
           hide-path: .gha  # it would otherwise be part of the build context
 
       - name: Scan the image
+        # Trivy pulls a private image with the ghcr.io login from "Log in to GHCR". It reads that
+        # login from the Docker config for ghcr.io only, so the token never reaches its DB mirrors.
         uses: ./.gha/.github/actions/trivy-scan
-        env:
-          TRIVY_USERNAME: ${{ github.actor }}  # trivy pulls the image itself, and a private repo's needs a login
-          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         with:
           image-ref: ${{ env.IMAGE }}:${{ env.CI_TAG }}
 

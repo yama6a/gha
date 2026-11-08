@@ -12,8 +12,10 @@ workflow's job carries the same `name:`, so the context is `go / go`, `node / no
 
 ### `go-ci.yaml`
 
-No inputs. Tidy drift, generate drift, golangci-lint with the canonical `.golangci.yaml` from this
-repo, fmt, vet, `go test -race -count=1` with coverage, govulncheck, cross-compile amd64 and arm64.
+No inputs. Tidy drift, generate drift, `actions/workflow-security`, golangci-lint with the
+canonical `.golangci.yaml` from this repo, fmt, vet, `go test -race -count=1` with coverage,
+govulncheck, cross-compile amd64 and arm64. golangci-lint is pinned in `GOLANGCI_LINT_VERSION`,
+and Renovate bumps it.
 The module and build caches are restored on every run and saved only from runs that are not a
 `pull_request`, so keep the caller's `push: branches: [main]` trigger.
 
@@ -44,8 +46,9 @@ CI agree.
 ### `node-ci.yaml`
 
 `npm ci`, then the scripts `generate` (followed by `git diff --exit-code`), `lint`,
-`format:check`, `typecheck`, `test`, `npm audit --audit-level=high`, `build`. Node version from
-`.nvmrc`. Every script must exist; `"exit 0"` where a project has nothing to do.
+`format:check`, `typecheck`, `test`, then `actions/workflow-security`,
+`npm audit --audit-level=high`, `build`. Node version from `.nvmrc`. Every script must exist;
+`"exit 0"` where a project has nothing to do.
 
 The audit runs through `scripts/npm-audit.sh`. It fails on the same findings as
 `npm audit --audit-level=high`: a high or critical advisory. A caller can allowlist an id in
@@ -405,8 +408,8 @@ Pinned shellcheck 0.10.0 and `shfmt -d -i 2 -ci -bn -sr`. Policy lives in the re
 
 ### `actions/yaml-checks`
 
-yamllint with this repo's `.yamllint.yml` (a local one wins, and replaces it wholesale) plus
-actionlint. No inputs.
+yamllint with this repo's `.yamllint.yml` (a local one wins, and replaces it wholesale),
+actionlint, then `actions/workflow-security`. No inputs.
 
 ```yaml
 - uses: yama6a/gha/.github/actions/yaml-checks@v2
@@ -436,11 +439,18 @@ Renovate bumps `TRIVY_VERSION` in the action.
 A caller can accept a finding in `.trivyignore` at the repo root, one CVE id per line with the
 reason after a `#`. Use it only when no released package or base image clears the finding.
 
+For a private image, log in with `docker/login-action` earlier in the same job. Trivy reads that
+login from the Docker config and sends it only to the registry it belongs to. Do not set
+`TRIVY_USERNAME` and `TRIVY_PASSWORD`: Trivy sends those to every registry it contacts, and that
+includes the `mirror.gcr.io` copy of its vulnerability database.
+
 ```yaml
+- uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550  # v4.8.0, only for a private image
+  with:
+    registry: ghcr.io
+    username: ${{ github.actor }}
+    password: ${{ secrets.GITHUB_TOKEN }}
 - uses: yama6a/gha/.github/actions/trivy-scan@v2
-  env:
-    TRIVY_USERNAME: ${{ github.actor }}  # only for a private image
-    TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
   with:
     image-ref: ghcr.io/owner/repo:1
 ```
@@ -449,6 +459,29 @@ reason after a `#`. Use it only when no released package or base image clears th
 |---|---|
 | `image-ref` | required |
 | `skip-dirs` | none; comma-separated image paths Trivy skips |
+
+### `actions/workflow-security`
+
+Checks the workflows and composite actions under `.github` for token and credential scope. It only
+warns today, so it never fails a check. A later change makes it fail on a finding.
+`actions/yaml-checks`, `go-ci.yaml` and `node-ci.yaml` run it, so a repo that uses one of them
+needs nothing more. No inputs.
+
+- zizmor, pinned in `ZIZMOR_VERSION` and bumped by Renovate, runs offline with the shared
+  `zizmor.yml`. Every finding of its regular persona becomes a warning. Examples are a checkout
+  that keeps its credential (`artipacked`) and permissions wider than the job needs
+  (`excessive-permissions`).
+- `token-scope.sh` warns where `GITHUB_TOKEN` sits in workflow-level or job-level `env:`, or goes
+  to the `with:`, `env:` or `secrets:` of a third-party action or reusable workflow. A third-party
+  action is one outside `actions/` and `yama6a/`. `docker/login-action` may get it as `password`.
+
+To silence one zizmor finding, put `# zizmor: ignore[<audit>]` on the flagged line, with the reason
+after it. In a `run: |` block a `#` line is shell, not YAML, so the comment goes after `run: |`. The
+config is shared and a repo cannot override it.
+
+```yaml
+- uses: yama6a/gha/.github/actions/workflow-security@v2
+```
 
 ### `actions/kubeconform`
 
@@ -464,11 +497,11 @@ resolved flags as `KUBECONFORM_ARGS` for a caller that pipes rendered YAML in.
 | input | default |
 |---|---|
 | `version` | `v0.6.7` |
-| `paths` | none |
+| `paths` | none; paths and globs, separated by whitespace |
 | `strict` | `true` |
 | `ignore-missing-schemas` | `true` |
 | `crd-catalog` | `true`; adds the datreeio CRDs catalog |
-| `parallelism` | kubeconform's default |
+| `parallelism` | kubeconform's default; a whole number |
 
 ### `actions/helm-chart-checks`
 
@@ -597,6 +630,11 @@ check still reports green) unless a config file changed. Every other event valid
 
 Sourced by the shared workflows and actions. `retry_run PATTERN WAITS COMMAND...` tries again
 only when the failed command's output matches `PATTERN`, so a real error fails on the first try.
+
+Every tool download from GitHub goes through `retry_release_download REPO TAG DIR ASSET...`. It
+runs `gh release download` with the job token in `GH_TOKEN`, and gives any failure three tries in
+about a minute. `gh` sends the token to the GitHub API only, not to the host a download redirects
+to. `GITHUB_TOKEN` can read public releases of any owner, also with only `contents: read`.
 
 | pattern | matches | used by |
 |---|---|---|

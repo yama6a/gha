@@ -1,9 +1,10 @@
 name: Trivy scan
 description: >-
   Scans an image with a pinned Trivy and fails on fixable HIGH and CRITICAL findings. When Trivy
-  or its vulnerability database cannot be downloaded, it skips the scan with a warning. Registry
-  credentials come from the caller's TRIVY_USERNAME and TRIVY_PASSWORD, and TRIVY_PLATFORM picks
-  one image out of an index. Trivy reads a .trivyignore in the working directory.
+  or its vulnerability database cannot be downloaded, it skips the scan with a warning. For a private
+  image, log in to its registry with docker/login-action first. Trivy reads that login from the
+  Docker config and sends it to that registry only. TRIVY_PLATFORM picks one image out of an index.
+  Trivy reads a .trivyignore in the working directory.
 inputs:
   image-ref:
     description: The image to scan, by tag or digest
@@ -66,8 +67,9 @@ runs:
           tar -xzf "$tmp/$tarball" -C "$DIR" trivy
           echo "downloaded=true" >> "$GITHUB_OUTPUT"
         fi
-        echo "$DIR" >> "$GITHUB_PATH"
-        "$DIR/trivy" --version
+        # trivy-action runs the trivy it finds on PATH.
+        sudo ln -sf "$DIR/trivy" /usr/local/bin/trivy
+        trivy --version
         echo "installed=true" >> "$GITHUB_OUTPUT"
 
     - name: save Trivy to the cache
