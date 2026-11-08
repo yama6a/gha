@@ -12,6 +12,7 @@ bolan-self-crawler          | main   | false | private | go / go,renovate-config
 claudetainer                | main   | false | public  | go / go,shell,yaml,renovate-config,build-amd64,build-arm64
 codarr                      | main   | false | public  | go / go,node / node,renovate-config
 gha                         | main   | false | public  | yaml,renovate-presets,kubeconform,shell-checks,hadolint,helm-chart-checks
+gha-status-exporter         | main   | false | public  | release label,go / go,chart,yaml,renovate-config
 longhorn-replica-affinity   | main   | false | public  | release label,go / go,chart,yaml,renovate-config
 offgrid                     | main   | false | public  | helm,shell,yaml,renovate-config,chart-tests
 offgrid-private             | main   | true  | private | helm,shell,yaml,renovate-config,chart-tests
