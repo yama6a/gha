@@ -1,9 +1,9 @@
 name: Trivy scan
 description: >-
-  Scans an image with a pinned Trivy and reports fixable HIGH and CRITICAL findings. When Trivy
-  cannot be downloaded from GitHub, it skips the scan with a warning. Registry credentials come
-  from the caller's TRIVY_USERNAME and TRIVY_PASSWORD, and TRIVY_PLATFORM picks one image out of
-  an index.
+  Scans an image with a pinned Trivy and fails on fixable HIGH and CRITICAL findings. When Trivy
+  or its vulnerability database cannot be downloaded, it skips the scan with a warning. Registry
+  credentials come from the caller's TRIVY_USERNAME and TRIVY_PASSWORD, and TRIVY_PLATFORM picks
+  one image out of an index. Trivy reads a .trivyignore in the working directory.
 inputs:
   image-ref:
     description: The image to scan, by tag or digest
@@ -23,6 +23,7 @@ runs:
       run: |
         echo "version=$TRIVY_VERSION" >> "$GITHUB_OUTPUT"
         echo "dir=$HOME/.local/bin/trivy-bin" >> "$GITHUB_OUTPUT"
+        echo "cache-dir=$RUNNER_TEMP/trivy-cache" >> "$GITHUB_OUTPUT"
 
     # The key and the path are the ones aquasecurity/setup-trivy uses, so a binary that a caller
     # cached before this action existed is still found.
@@ -76,17 +77,38 @@ runs:
         path: ${{ steps.pin.outputs.dir }}
         key: ${{ steps.cache.outputs.cache-primary-key }}
 
-    # Report-only until every repo has a week of output to review and a .trivyignore for whatever
-    # it decides to carry. Enforcing is then a one-line change to exit-code.
-    - name: scan the image
+    # Trivy fetches the Java DB, about 1 GB, only when the image holds a JAR. No caller's image does,
+    # so the scan fetches it itself, without retries, if one ever appears.
+    - name: download the vulnerability database
+      id: db
       if: steps.install.outputs.installed == 'true'
+      shell: bash
+      env:
+        RETRY_SH: ${{ github.action_path }}/../../../scripts/retry.sh
+        TRIVY_CACHE_DIR: ${{ steps.pin.outputs.cache-dir }}
+      run: |
+        set -euo pipefail
+        source "$RETRY_SH"
+        if ! retry_run '' "20 40" trivy image --download-db-only --no-progress; then
+          echo "::warning::the Trivy vulnerability database could not be downloaded, so the image was not scanned"
+          exit 0
+        fi
+        echo "ready=true" >> "$GITHUB_OUTPUT"
+
+    # cache false: the action's own cache would restore an older database over the fresh one.
+    - name: scan the image
+      if: steps.db.outputs.ready == 'true'
       uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+      env:
+        TRIVY_SKIP_DB_UPDATE: 'true'
       with:
         image-ref: ${{ inputs.image-ref }}
         skip-dirs: ${{ inputs.skip-dirs }}
         skip-setup-trivy: true
+        cache: 'false'
+        cache-dir: ${{ steps.pin.outputs.cache-dir }}
         format: table
-        exit-code: '0'
+        exit-code: '1'
         ignore-unfixed: true
         vuln-type: os,library
         severity: CRITICAL,HIGH

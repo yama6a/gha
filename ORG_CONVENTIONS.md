@@ -126,8 +126,9 @@ them report on a PR, so the PR sits pending forever.
   image is where reproducibility comes from; DL3006 (untagged `FROM`) ignored because the
   image-builder repos take the base as a build arg on purpose.
 - every image goes through `docker-build-release.yaml@v2`, or the multiarch variant when the build
-  cannot run under QEMU: hadolint, build with provenance and SBOM, trivy scan (report-only until
-  flipped), signed attestation (public repos only; private needs Enterprise Cloud), GitHub release.
+  cannot run under QEMU: hadolint, build with provenance and SBOM, trivy scan that fails on fixable
+  HIGH and CRITICAL findings, signed attestation (public repos only; private needs Enterprise
+  Cloud), GitHub release.
 - the caller grants `contents: write`, `packages: write`, `id-token: write`,
   `attestations: write`; a `deploy` job in the same file gets `permissions: {}`.
 - release versions are integers. A repo that derives its own version passes `version`.

@@ -149,8 +149,8 @@ jobs:
           cache-to: ${{ inputs.registry-cache && format('type=registry,ref={0}:buildcache-{1},mode=max,ignore-error=true', env.IMAGE, env.PLATFORM_PAIR) || '' }}
           hide-path: .gha  # it would otherwise be part of the build context
 
-      # Each arch is scanned on its own native runner, before merge joins the digests. The scan is
-      # report-only for now. Once it enforces, merge needs build, so a red scan blocks the manifest.
+      # Each arch is scanned on its own native runner, before merge joins the digests. merge needs
+      # build, so a red scan blocks the manifest.
       - name: Scan the image
         uses: ./.gha/.github/actions/trivy-scan
         env:
