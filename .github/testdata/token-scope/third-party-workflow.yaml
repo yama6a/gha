@@ -1,0 +1,6 @@
+on: push
+jobs:
+  release:
+    uses: some-owner/workflows/.github/workflows/release.yaml@v1
+    secrets:
+      token: ${{ secrets.GITHUB_TOKEN }}

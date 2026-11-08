@@ -1,0 +1,10 @@
+# The one zizmor config for gha and every caller. A caller silences a finding with an inline
+# `# zizmor: ignore[<audit>]` comment on the flagged line.
+rules:
+  unpinned-uses:
+    config:
+      policies:
+        "yama6a/gha/*": ref-pin  # callers pin the shared workflows and actions to @v2 by design
+        "*": hash-pin
+  self-repository:
+    disable: true

@@ -1,0 +1,37 @@
+name: Workflow security
+description: >-
+  Warns about workflow token and credential scope with zizmor and a token-scope script.
+  Report-only for now.
+runs:
+  using: composite
+  steps:
+    # Prints every finding of zizmor's regular persona as a warning. --format github would print
+    # high-severity findings as errors, so the step reads the JSON and prints the warnings itself.
+    - name: zizmor
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        ZIZMOR_VERSION: 1.32.0  # renovate.json5 bumps this
+        CONFIG: ${{ github.action_path }}/zizmor.yml
+      run: |
+        set -euo pipefail
+        if [ ! -d .github ]; then
+          echo "::notice::no .github folder, so zizmor has nothing to check"
+          exit 0
+        fi
+        report="$RUNNER_TEMP/zizmor.json"
+        pipx run --spec "zizmor==$ZIZMOR_VERSION" zizmor --offline --no-exit-codes --no-progress \
+          --config "$CONFIG" --format json .github > "$report"
+        jq -r '
+          .[] | select(.ignored | not) | . as $f
+          | first(.locations[] | select(.symbolic.kind == "Primary"))
+          | "::warning file=\(.symbolic.key.Local.verbatim_path),line=\(.concrete.location.start_point.row + 1),title=zizmor \($f.ident)::\($f.desc): \(.symbolic.annotation)"
+        ' "$report"
+        echo "zizmor: $(jq '[.[] | select(.ignored | not)] | length' "$report") finding(s)"
+
+    - name: token scope
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        ACTION_PATH: ${{ github.action_path }}
+      run: bash "$ACTION_PATH/token-scope.sh"

@@ -15,12 +15,16 @@ jobs:
     runs-on: ubuntu-26.04-arm
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
       - uses: ./.github/actions/yaml-checks
 
   renovate-presets:
     runs-on: ubuntu-26.04-arm
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
       # A broken preset here silently falls every consuming repo back to Renovate's defaults.
       - uses: ./.github/actions/validate-renovate-config
         with:
@@ -33,6 +37,8 @@ jobs:
     runs-on: ubuntu-26.04-arm
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: ./.github/actions/kubeconform
         with:
@@ -62,6 +68,8 @@ jobs:
     runs-on: ubuntu-26.04-arm
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: ./.github/actions/helm-chart-checks
         with:
@@ -95,6 +103,8 @@ jobs:
     runs-on: ubuntu-26.04-arm
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - uses: ./.github/actions/shell-checks
         with:
@@ -124,6 +134,8 @@ jobs:
     runs-on: ubuntu-26.04-arm
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       # Dockerfile.unpinned-apt is the ignore list earning its keep: DL3008 would otherwise fail it.
       - uses: ./.github/actions/hadolint
@@ -145,7 +157,18 @@ jobs:
     runs-on: ubuntu-26.04-arm
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
       - run: scripts/retry_test.sh
+
+  workflow-security:
+    runs-on: ubuntu-26.04-arm
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - run: .github/actions/workflow-security/token-scope_test.sh
+      - uses: ./.github/actions/workflow-security
 
   # The release workflows read the digest output, and every caller relies on hide-path to keep
   # the shared actions checkout out of its image.
@@ -158,6 +181,8 @@ jobs:
           - 5000:5000
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1

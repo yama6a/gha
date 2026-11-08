@@ -1,0 +1,8 @@
+on: push
+env:
+  GH_TOKEN: ${{ github.token }}
+jobs:
+  build:
+    runs-on: ubuntu-26.04-arm
+    steps:
+      - run: gh release list

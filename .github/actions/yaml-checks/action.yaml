@@ -1,5 +1,5 @@
 name: YAML and workflow lint
-description: Runs yamllint against the repo and actionlint against its workflow files.
+description: Runs yamllint against the repo, actionlint against its workflow files, then actions/workflow-security.
 runs:
   using: composite
   steps:
@@ -18,11 +18,21 @@ runs:
 
     - name: actionlint  # lints workflow files, and shellchecks their run: blocks
       shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RETRY_SH: ${{ github.action_path }}/../../../scripts/retry.sh
       run: |
-        curl -fsSL "https://github.com/rhysd/actionlint/releases/download/v1.7.7/actionlint_1.7.7_linux_$(dpkg --print-architecture).tar.gz" \
-          | tar xz actionlint
+        set -euo pipefail
+        source "$RETRY_SH"
+        tarball="actionlint_1.7.7_linux_$(dpkg --print-architecture).tar.gz"
+        dir="$(mktemp -d)"
+        retry_release_download rhysd/actionlint v1.7.7 "$dir" "$tarball"
+        tar -xzf "$dir/$tarball" -C "$dir" actionlint
         # No actionlint release knows the copilot-requests scope yet; consumers grant it to renovate.yaml.
         # Its runner label list is hardcoded and lags GitHub by months, so runs-on labels go unchecked.
-        ./actionlint -color \
+        "$dir/actionlint" -color \
           -ignore 'unknown permission scope "copilot-requests"' \
           -ignore 'label ".+" is unknown'
+
+    - name: workflow security
+      uses: $/.github/actions/workflow-security
