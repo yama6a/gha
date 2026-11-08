@@ -601,6 +601,11 @@ check still reports green) unless a config file changed. Every other event valid
 Sourced by the shared workflows and actions. `retry_run PATTERN WAITS COMMAND...` tries again
 only when the failed command's output matches `PATTERN`, so a real error fails on the first try.
 
+Every tool download from GitHub goes through `retry_release_download REPO TAG DIR ASSET...`. It
+runs `gh release download` with the job token in `GH_TOKEN`, and gives any failure three tries in
+about a minute. `gh` sends the token to the GitHub API only, not to the host a download redirects
+to. `GITHUB_TOKEN` can read public releases of any owner, also with only `contents: read`.
+
 | pattern | matches | used by |
 |---|---|---|
 | `RETRY_RATE_LIMIT` | `toomanyrequests`, `429 Too Many Requests`, `Rate exceeded` | `actions/docker-build` |

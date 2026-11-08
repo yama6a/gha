@@ -32,11 +32,18 @@ runs:
   steps:
     - name: install kubeconform
       shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RETRY_SH: ${{ github.action_path }}/../../../scripts/retry.sh
+        VERSION: ${{ inputs.version }}
       run: |
         set -euo pipefail
-        curl -fsSL "https://github.com/yannh/kubeconform/releases/download/${{ inputs.version }}/kubeconform-linux-$(dpkg --print-architecture).tar.gz" \
-          | tar xz kubeconform
-        sudo mv kubeconform /usr/local/bin/
+        source "$RETRY_SH"
+        tarball="kubeconform-linux-$(dpkg --print-architecture).tar.gz"
+        dir="$(mktemp -d)"
+        retry_release_download yannh/kubeconform "$VERSION" "$dir" "$tarball"
+        tar -xzf "$dir/$tarball" -C "$dir" kubeconform
+        sudo mv "$dir/kubeconform" /usr/local/bin/
         kubeconform -v
 
     - name: resolve kubeconform args
