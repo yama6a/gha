@@ -432,11 +432,18 @@ The binary is cached in the Actions cache. On a cache miss the download from Git
 tries in about a minute, then the action skips the scan with a warning. The release workflows run
 it. Renovate bumps `TRIVY_VERSION` in the action.
 
+For a private image, log in with `docker/login-action` earlier in the same job. Trivy reads that
+login from the Docker config and sends it only to the registry it belongs to. Do not set
+`TRIVY_USERNAME` and `TRIVY_PASSWORD`: Trivy sends those to every registry it contacts, and that
+includes the `mirror.gcr.io` copy of its vulnerability database.
+
 ```yaml
+- uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550  # v4.8.0, only for a private image
+  with:
+    registry: ghcr.io
+    username: ${{ github.actor }}
+    password: ${{ secrets.GITHUB_TOKEN }}
 - uses: yama6a/gha/.github/actions/trivy-scan@v2
-  env:
-    TRIVY_USERNAME: ${{ github.actor }}  # only for a private image
-    TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
   with:
     image-ref: ghcr.io/owner/repo:1
 ```

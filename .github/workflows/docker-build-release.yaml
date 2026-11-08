@@ -188,10 +188,9 @@ jobs:
           hide-path: .gha  # it would otherwise be part of the build context
 
       - name: Scan the image
+        # Trivy pulls a private image with the ghcr.io login from "Log in to GHCR". It reads that
+        # login from the Docker config for ghcr.io only, so the token never reaches its DB mirrors.
         uses: ./.gha/.github/actions/trivy-scan
-        env:
-          TRIVY_USERNAME: ${{ github.actor }}  # trivy pulls the image itself, and a private repo's needs a login
-          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         with:
           image-ref: ${{ env.IMAGE }}:${{ env.CI_TAG }}
 

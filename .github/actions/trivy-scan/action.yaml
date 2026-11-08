@@ -1,9 +1,9 @@
 name: Trivy scan
 description: >-
   Scans an image with a pinned Trivy and reports fixable HIGH and CRITICAL findings. When Trivy
-  cannot be downloaded from GitHub, it skips the scan with a warning. Registry credentials come
-  from the caller's TRIVY_USERNAME and TRIVY_PASSWORD, and TRIVY_PLATFORM picks one image out of
-  an index.
+  cannot be downloaded from GitHub, it skips the scan with a warning. For a private image, log in
+  to its registry with docker/login-action first. Trivy reads that login from the Docker config
+  and sends it to that registry only. TRIVY_PLATFORM picks one image out of an index.
 inputs:
   image-ref:
     description: The image to scan, by tag or digest

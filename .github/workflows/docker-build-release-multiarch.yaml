@@ -158,10 +158,10 @@ jobs:
       # Each arch is scanned on its own native runner, before merge joins the digests. The scan is
       # report-only for now. Once it enforces, merge needs build, so a red scan blocks the manifest.
       - name: Scan the image
+        # Trivy pulls a private image with the ghcr.io login from "Log in to GHCR". It reads that
+        # login from the Docker config for ghcr.io only, so the token never reaches its DB mirrors.
         uses: ./.gha/.github/actions/trivy-scan
         env:
-          TRIVY_USERNAME: ${{ github.actor }}  # trivy pulls the image itself, and a private repo's needs a login
-          TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
           # The per-arch push is an index (image + attestation), and trivy picks linux/amd64 out of
           # an index unless told otherwise, so the arm64 leg fails with "no child with platform".
           TRIVY_PLATFORM: ${{ matrix.platform }}
