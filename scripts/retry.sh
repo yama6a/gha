@@ -37,7 +37,7 @@ retry_run() {
     if [ "$code" -eq 0 ] || [ -z "$wait" ] || { [ -n "$pattern" ] && ! retry_matches "$pattern" "$log"; }; then
       break
     fi
-    echo "::warning::$1 failed with a transient error, trying again in ${wait}s" >&2
+    echo "::warning::$1 failed, trying again in ${wait}s" >&2
     sleep "$wait"
   done
   rm -f "$log"
