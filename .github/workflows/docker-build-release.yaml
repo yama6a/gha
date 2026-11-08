@@ -136,7 +136,8 @@ jobs:
       # runner instead of once per target arch under emulation.
       - name: Run build command
         if: inputs.build-command != ''
-        run: ${{ inputs.build-command }}
+        # The input is a shell command by contract, so it has to run as code.
+        run: ${{ inputs.build-command }}  # zizmor: ignore[template-injection] the caller writes this command
 
       # Same guard as the restore: its outputs are empty when it was skipped.
       - name: Save the npm store

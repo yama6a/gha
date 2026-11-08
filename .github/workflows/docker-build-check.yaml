@@ -84,4 +84,5 @@ jobs:
         if: inputs.smoke-test != ''
         env:
           IMAGE: smoke-test:${{ github.run_id }}
-        run: ${{ inputs.smoke-test }}
+        # The input is a shell command by contract, so it has to run as code.
+        run: ${{ inputs.smoke-test }}  # zizmor: ignore[template-injection] the caller writes this command

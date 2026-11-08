@@ -34,8 +34,8 @@ runs:
         fi
         mv "$dir/hadolint-Linux-${arch}" "$dir/hadolint"
         chmod +x "$dir/hadolint"
-        echo "$dir" >> "$GITHUB_PATH"
-        "$dir/hadolint" --version
+        sudo ln -sf "$dir/hadolint" /usr/local/bin/hadolint
+        hadolint --version
         echo "installed=true" >> "$GITHUB_OUTPUT"
 
     - name: hadolint

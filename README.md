@@ -471,8 +471,9 @@ needs nothing more. No inputs.
   to the `with:`, `env:` or `secrets:` of a third-party action or reusable workflow. A third-party
   action is one outside `actions/` and `yama6a/`. `docker/login-action` may get it as `password`.
 
-To silence one zizmor finding, put `# zizmor: ignore[<audit>]` on the flagged line. The config is
-shared and a repo cannot override it.
+To silence one zizmor finding, put `# zizmor: ignore[<audit>]` on the flagged line, with the reason
+after it. In a `run: |` block a `#` line is shell, not YAML, so the comment goes after `run: |`. The
+config is shared and a repo cannot override it.
 
 ```yaml
 - uses: yama6a/gha/.github/actions/workflow-security@v2
@@ -492,11 +493,11 @@ resolved flags as `KUBECONFORM_ARGS` for a caller that pipes rendered YAML in.
 | input | default |
 |---|---|
 | `version` | `v0.6.7` |
-| `paths` | none |
+| `paths` | none; paths and globs, separated by whitespace |
 | `strict` | `true` |
 | `ignore-missing-schemas` | `true` |
 | `crd-catalog` | `true`; adds the datreeio CRDs catalog |
-| `parallelism` | kubeconform's default |
+| `parallelism` | kubeconform's default; a whole number |
 
 ### `actions/helm-chart-checks`
 

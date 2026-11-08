@@ -4,7 +4,7 @@
   // Which manager owns what:
   //   github-actions  the action pins in .github/workflows/*.yaml and .github/actions/*/action.yaml
   //   regex           the renovate npm pin behind validate-renovate-config, the Copilot CLI
-  //                   npm pin behind renovate-bc-check, the Trivy release behind trivy-scan,
+  //                   release behind renovate-bc-check, the Trivy release behind trivy-scan,
   //                   the zizmor PyPI pin behind workflow-security, and the golangci-lint
   //                   release in go-ci.yaml
   // Cadence is the cron in .github/workflows/renovate.yaml, not an internal `schedule`, so a manual
@@ -26,8 +26,8 @@
       customType: "regex",
       managerFilePatterns: [".github/actions/renovate-bc-check/action.yaml"],
       matchStrings: ["COPILOT_VERSION: (?<currentValue>\\S+)"],
-      depNameTemplate: "@github/copilot",
-      datasourceTemplate: "npm",
+      depNameTemplate: "github/copilot-cli",
+      datasourceTemplate: "github-releases",
     },
     {
       customType: "regex",

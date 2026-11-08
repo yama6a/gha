@@ -36,11 +36,13 @@ runs:
         retry_release_download mvdan/sh v3.10.0 "$dir" "shfmt_v3.10.0_linux_${shfmt_arch}"
         mv "$dir/shfmt_v3.10.0_linux_${shfmt_arch}" "$dir/shfmt"
         chmod +x "$dir/shfmt"
-        echo "$dir" >> "$GITHUB_PATH"
-        "$dir/shellcheck" --version
-        "$dir/shfmt" --version
+        # /usr/local/bin comes before /usr/bin on PATH, so the pinned shellcheck wins over the image's.
+        sudo ln -sf "$dir/shellcheck" "$dir/shfmt" /usr/local/bin/
+        shellcheck --version
+        shfmt --version
 
     - name: resolve paths
+      id: paths
       shell: bash
       env:
         PATHS: ${{ inputs.paths }}
@@ -63,15 +65,17 @@ runs:
               esac
             done | LC_ALL=C sort > "$list"
         fi
-        echo "SHELL_CHECK_LIST=$list" >> "$GITHUB_ENV"
+        echo "list=$list" >> "$GITHUB_OUTPUT"
         echo "checking $(wc -l < "$list") file(s)"
         cat "$list"
 
     - name: shellcheck
       shell: bash
+      env:
+        LIST: ${{ steps.paths.outputs.list }}
       run: |
         set -euo pipefail
-        mapfile -t files < "$SHELL_CHECK_LIST"
+        mapfile -t files < "$LIST"
         if [ "${#files[@]}" -eq 0 ]; then exit 0; fi
         shellcheck "${files[@]}"
 
@@ -79,8 +83,10 @@ runs:
     # on the command line turns that lookup off, so a stray .editorconfig cannot move CI.
     - name: shfmt
       shell: bash
+      env:
+        LIST: ${{ steps.paths.outputs.list }}
       run: |
         set -euo pipefail
-        mapfile -t files < "$SHELL_CHECK_LIST"
+        mapfile -t files < "$LIST"
         if [ "${#files[@]}" -eq 0 ]; then exit 0; fi
         shfmt -d -i 2 -ci -bn -sr "${files[@]}"

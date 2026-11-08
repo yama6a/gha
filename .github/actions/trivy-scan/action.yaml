@@ -65,8 +65,9 @@ runs:
           tar -xzf "$tmp/$tarball" -C "$DIR" trivy
           echo "downloaded=true" >> "$GITHUB_OUTPUT"
         fi
-        echo "$DIR" >> "$GITHUB_PATH"
-        "$DIR/trivy" --version
+        # trivy-action runs the trivy it finds on PATH.
+        sudo ln -sf "$DIR/trivy" /usr/local/bin/trivy
+        trivy --version
         echo "installed=true" >> "$GITHUB_OUTPUT"
 
     - name: save Trivy to the cache
