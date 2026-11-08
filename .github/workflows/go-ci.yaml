@@ -72,7 +72,24 @@ jobs:
           sparse-checkout: |
             .golangci.yaml
             scripts/govulncheck.sh
+            scripts/retry.sh
           sparse-checkout-cone-mode: false  # cone mode selects directories, not single files
+
+      # Installed here with the job token rather than by golangci-lint-action, which downloads from
+      # GitHub without one.
+      - name: Install golangci-lint
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GOLANGCI_LINT_VERSION: v2.15.0  # renovate.json5 bumps this
+        run: |
+          set -euo pipefail
+          source .gha/scripts/retry.sh
+          name="golangci-lint-${GOLANGCI_LINT_VERSION#v}-linux-$(dpkg --print-architecture)"
+          dir="$(mktemp -d)"
+          retry_release_download golangci/golangci-lint "$GOLANGCI_LINT_VERSION" "$dir" "$name.tar.gz"
+          tar -xzf "$dir/$name.tar.gz" -C "$dir" "$name/golangci-lint"
+          sudo mv "$dir/$name/golangci-lint" /usr/local/bin/
+          golangci-lint --version
 
       # `*+` appends arrays, so .golangci.local.yaml lists only its additions. .gha goes away
       # here so the cross-compile and any later git diff never see it.
@@ -96,12 +113,12 @@ jobs:
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a  # v9.3.0
         with:
+          install-mode: none
           args: --timeout 5m -c /tmp/golangci.yaml ./...
           skip-save-cache: ${{ github.event_name == 'pull_request' }}  # a PR-scoped save is readable by that PR alone
 
       # `run` does not enforce the formatters, so check them separately. Without
       # -c this only runs gofmt, and gofumpt and goimports go unchecked.
-      # golangci-lint-action put the binary on PATH.
       - name: Check formatting
         run: golangci-lint fmt --diff -c /tmp/golangci.yaml
 
