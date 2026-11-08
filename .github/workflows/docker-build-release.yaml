@@ -153,7 +153,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
 
-      - name: Check out the shared build and release actions
+      - name: Check out the shared build, scan and release actions
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           repository: ${{ job.workflow_repository }}
@@ -162,6 +162,7 @@ jobs:
           sparse-checkout: |
             .github/actions/docker-build
             .github/actions/gh-release
+            .github/actions/trivy-scan
             scripts/retry.sh
           sparse-checkout-cone-mode: false
 
@@ -182,20 +183,13 @@ jobs:
           tags: ${{ env.IMAGE }}:${{ env.CI_TAG }}
           hide-path: .gha  # it would otherwise be part of the build context
 
-      # Report-only until every repo has a week of output to review and a .trivyignore for whatever
-      # it decides to carry; enforcing is then a one-line change to exit-code.
       - name: Scan the image
-        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+        uses: ./.gha/.github/actions/trivy-scan
         env:
           TRIVY_USERNAME: ${{ github.actor }}  # trivy pulls the image itself, and a private repo's needs a login
           TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
         with:
           image-ref: ${{ env.IMAGE }}:${{ env.CI_TAG }}
-          format: table
-          exit-code: '0'
-          ignore-unfixed: true
-          vuln-type: os,library
-          severity: CRITICAL,HIGH
 
       # The ci-* tag is left in place on purpose: the release tag is a byte-identical copy with
       # the same digest, and GHCR deletes by digest, so removing the ci-* package version

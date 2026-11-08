@@ -130,9 +130,11 @@ jobs:
         with:
           dockerfiles: .github/testdata/hadolint/Dockerfile.clean .github/testdata/hadolint/Dockerfile.unpinned-apt
 
+      # The action skips the lint when the download fails, and a missing hadolint would pass the check below.
       - name: a piped shell install still fails
         run: |
           set -uo pipefail
+          command -v hadolint > /dev/null || { echo "::error::hadolint is not installed"; exit 1; }
           if hadolint --config .hadolint.yaml .github/testdata/hadolint/Dockerfile.bad; then
             echo "::error::hadolint accepted the DL3003 and DL4006 fixture"
             exit 1

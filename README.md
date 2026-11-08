@@ -414,14 +414,37 @@ actionlint. No inputs.
 
 ### `actions/hadolint`
 
-Pinned hadolint 2.12.0 with this repo's `.hadolint.yaml` unless the repo has its own. Both docker
-workflows already run it.
+Pinned hadolint 2.12.0 with this repo's `.hadolint.yaml` unless the repo has its own. Every docker
+workflow already runs it. When the download from GitHub fails three times in about a minute, the
+action skips the lint with a warning, so a GitHub outage does not stop a release. A hadolint
+finding still fails the step.
 
 ```yaml
 - uses: yama6a/gha/.github/actions/hadolint@v2
   # with:
   #   dockerfiles: .build/Dockerfile   # default discovers Dockerfile* recursively
 ```
+
+### `actions/trivy-scan`
+
+Pinned Trivy over one image, report-only: it prints fixable HIGH and CRITICAL findings and passes.
+The binary is cached in the Actions cache. On a cache miss the download from GitHub gets three
+tries in about a minute, then the action skips the scan with a warning. The release workflows run
+it. Renovate bumps `TRIVY_VERSION` in the action.
+
+```yaml
+- uses: yama6a/gha/.github/actions/trivy-scan@v2
+  env:
+    TRIVY_USERNAME: ${{ github.actor }}  # only for a private image
+    TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+  with:
+    image-ref: ghcr.io/owner/repo:1
+```
+
+| input | default |
+|---|---|
+| `image-ref` | required |
+| `skip-dirs` | none; comma-separated image paths Trivy skips |
 
 ### `actions/kubeconform`
 

@@ -24,8 +24,8 @@ retry_capture() {
 }
 
 # retry_run PATTERN WAITS COMMAND... runs COMMAND, and after a failure whose output matches
-# PATTERN sleeps for the next number of seconds in WAITS and runs it again. WAITS "5 15" allows
-# three tries. Returns the exit code of the last try.
+# PATTERN sleeps for the next number of seconds in WAITS and runs it again. An empty PATTERN
+# retries every failure. WAITS "5 15" allows three tries. Returns the exit code of the last try.
 retry_run() {
   local pattern=$1 waits=$2 log wait code
   shift 2
@@ -34,12 +34,22 @@ retry_run() {
     : > "$log"
     code=0
     retry_capture "$log" "$@" || code=$?
-    if [ "$code" -eq 0 ] || [ -z "$wait" ] || ! retry_matches "$pattern" "$log"; then
+    if [ "$code" -eq 0 ] || [ -z "$wait" ] || { [ -n "$pattern" ] && ! retry_matches "$pattern" "$log"; }; then
       break
     fi
-    echo "::warning::$1 failed with a transient error, trying again in ${wait}s" >&2
+    echo "::warning::$1 failed, trying again in ${wait}s" >&2
     sleep "$wait"
   done
   rm -f "$log"
   return "$code"
+}
+
+# retry_release_download REPO TAG DIR ASSET... downloads the named assets of a GitHub release into
+# DIR. It goes through the API with GH_TOKEN, because GitHub can time out anonymous downloads while
+# authenticated ones still work. Any failure gets three tries over about a minute.
+retry_release_download() {
+  local repo=$1 tag=$2 dir=$3 asset patterns=()
+  shift 3
+  for asset in "$@"; do patterns+=(--pattern "$asset"); done
+  retry_run '' "20 40" gh release download "$tag" --repo "$repo" --dir "$dir" --clobber "${patterns[@]}"
 }
