@@ -1,5 +1,5 @@
 name: YAML and workflow lint
-description: Runs yamllint against the repo and actionlint against its workflow files.
+description: Runs yamllint against the repo, actionlint against its workflow files, then actions/workflow-security.
 runs:
   using: composite
   steps:
@@ -33,3 +33,6 @@ runs:
         "$dir/actionlint" -color \
           -ignore 'unknown permission scope "copilot-requests"' \
           -ignore 'label ".+" is unknown'
+
+    - name: workflow security
+      uses: $/.github/actions/workflow-security

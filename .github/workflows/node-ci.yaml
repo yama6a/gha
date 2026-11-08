@@ -94,8 +94,13 @@ jobs:
           repository: ${{ job.workflow_repository }}
           ref: ${{ job.workflow_sha }}
           path: .gha
-          sparse-checkout: scripts/npm-audit.sh
+          sparse-checkout: |
+            .github/actions/workflow-security
+            scripts/npm-audit.sh
           sparse-checkout-cone-mode: false  # cone mode selects directories, not single files
+
+      - name: Check workflow security
+        uses: ./.gha/.github/actions/workflow-security
 
       - name: Stage the audit script
         run: |

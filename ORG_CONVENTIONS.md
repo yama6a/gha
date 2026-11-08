@@ -19,6 +19,7 @@ gha holds the shared workflows, composite actions and Renovate presets; `v2` is 
 | Dependabot alerts | off; Renovate is the update path |
 | secret scanning | on with push protection in every public repo; a private repo needs Team, the plan here is Pro |
 | commits | signed, one-line subject |
+| workflows | `GITHUB_TOKEN` in the `env:` of the step that uses it, never in workflow or job `env:`. `actions/checkout` with `persist-credentials: false`, unless a later step pushes with git. Checked by `actions/workflow-security` |
 
 Applied by `scripts/repo-settings.sh`, not by hand.
 

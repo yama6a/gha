@@ -12,9 +12,10 @@ workflow's job carries the same `name:`, so the context is `go / go`, `node / no
 
 ### `go-ci.yaml`
 
-No inputs. Tidy drift, generate drift, golangci-lint with the canonical `.golangci.yaml` from this
-repo, fmt, vet, `go test -race -count=1` with coverage, govulncheck, cross-compile amd64 and arm64.
-golangci-lint is pinned in `GOLANGCI_LINT_VERSION`, and Renovate bumps it.
+No inputs. Tidy drift, generate drift, `actions/workflow-security`, golangci-lint with the
+canonical `.golangci.yaml` from this repo, fmt, vet, `go test -race -count=1` with coverage,
+govulncheck, cross-compile amd64 and arm64. golangci-lint is pinned in `GOLANGCI_LINT_VERSION`,
+and Renovate bumps it.
 The module and build caches are restored on every run and saved only from runs that are not a
 `pull_request`, so keep the caller's `push: branches: [main]` trigger.
 
@@ -45,8 +46,9 @@ CI agree.
 ### `node-ci.yaml`
 
 `npm ci`, then the scripts `generate` (followed by `git diff --exit-code`), `lint`,
-`format:check`, `typecheck`, `test`, `npm audit --audit-level=high`, `build`. Node version from
-`.nvmrc`. Every script must exist; `"exit 0"` where a project has nothing to do.
+`format:check`, `typecheck`, `test`, then `actions/workflow-security`,
+`npm audit --audit-level=high`, `build`. Node version from `.nvmrc`. Every script must exist;
+`"exit 0"` where a project has nothing to do.
 
 The audit runs through `scripts/npm-audit.sh`. It fails on the same findings as
 `npm audit --audit-level=high`: a high or critical advisory. A caller can allowlist an id in
@@ -406,8 +408,8 @@ Pinned shellcheck 0.10.0 and `shfmt -d -i 2 -ci -bn -sr`. Policy lives in the re
 
 ### `actions/yaml-checks`
 
-yamllint with this repo's `.yamllint.yml` (a local one wins, and replaces it wholesale) plus
-actionlint. No inputs.
+yamllint with this repo's `.yamllint.yml` (a local one wins, and replaces it wholesale),
+actionlint, then `actions/workflow-security`. No inputs.
 
 ```yaml
 - uses: yama6a/gha/.github/actions/yaml-checks@v2
@@ -453,6 +455,28 @@ includes the `mirror.gcr.io` copy of its vulnerability database.
 |---|---|
 | `image-ref` | required |
 | `skip-dirs` | none; comma-separated image paths Trivy skips |
+
+### `actions/workflow-security`
+
+Checks the workflows and composite actions under `.github` for token and credential scope. It only
+warns today, so it never fails a check. A later change makes it fail on a finding.
+`actions/yaml-checks`, `go-ci.yaml` and `node-ci.yaml` run it, so a repo that uses one of them
+needs nothing more. No inputs.
+
+- zizmor, pinned in `ZIZMOR_VERSION` and bumped by Renovate, runs offline with the shared
+  `zizmor.yml`. Every finding of its regular persona becomes a warning. Examples are a checkout
+  that keeps its credential (`artipacked`) and permissions wider than the job needs
+  (`excessive-permissions`).
+- `token-scope.sh` warns where `GITHUB_TOKEN` sits in workflow-level or job-level `env:`, or goes
+  to the `with:`, `env:` or `secrets:` of a third-party action or reusable workflow. A third-party
+  action is one outside `actions/` and `yama6a/`. `docker/login-action` may get it as `password`.
+
+To silence one zizmor finding, put `# zizmor: ignore[<audit>]` on the flagged line. The config is
+shared and a repo cannot override it.
+
+```yaml
+- uses: yama6a/gha/.github/actions/workflow-security@v2
+```
 
 ### `actions/kubeconform`
 
