@@ -414,8 +414,10 @@ actionlint. No inputs.
 
 ### `actions/hadolint`
 
-Pinned hadolint 2.12.0 with this repo's `.hadolint.yaml` unless the repo has its own. Both docker
-workflows already run it.
+Pinned hadolint 2.12.0 with this repo's `.hadolint.yaml` unless the repo has its own. Every docker
+workflow already runs it. When the download from GitHub fails three times in about a minute, the
+action skips the lint with a warning, so a GitHub outage does not stop a release. A hadolint
+finding still fails the step.
 
 ```yaml
 - uses: yama6a/gha/.github/actions/hadolint@v2

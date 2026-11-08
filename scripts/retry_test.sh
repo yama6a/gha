@@ -63,6 +63,28 @@ run_case "build error fails at once" 5 docker-build-error.log 7 9 7 1
 run_case "rate limit on every try" 5 docker-429.log 1 9 1 2
 run_case "three tries on 5xx" "5 15" docker-503.log 1 9 1 3
 
+docker_patterns='' run_case "empty pattern retries a build error" "5 15" docker-build-error.log 7 1 0 2
+docker_patterns='' run_case "empty pattern gives up after the last try" "5 15" docker-build-error.log 7 9 7 3
+
+# A fake gh for retry_release_download: it records its arguments and fails the first $GH_FAILS calls.
+# shellcheck disable=SC2329  # retry_run calls it by name
+gh() {
+  echo "$*" > "$work/gh-args"
+  flaky "$logs/gh-422.log" 1 "$GH_FAILS"
+}
+download_case() {
+  local name=$1 want_code=$3 want_calls=$4 got_code=0
+  rm -f "$work/calls"
+  GH_FAILS=$2 retry_release_download o/tool v1.2.3 "$work/dl" tool.tar.gz checksums.txt > /dev/null 2>&1 || got_code=$?
+  if [ "$got_code" != "$want_code" ]; then fail "release download $name: exit code $got_code, want $want_code"; fi
+  if [ "$(cat "$work/calls")" != "$want_calls" ]; then fail "release download $name: $(cat "$work/calls") tries, want $want_calls"; fi
+}
+download_case "success on the third try" 2 0 3
+download_case "three failures" 9 1 3
+want_args="release download v1.2.3 --repo o/tool --dir $work/dl --clobber --pattern tool.tar.gz --pattern checksums.txt"
+if [ "$(cat "$work/gh-args")" != "$want_args" ]; then fail "release download: gh got '$(cat "$work/gh-args")'"; fi
+unset -f gh
+
 if bash -ec 'source scripts/retry.sh; retry_capture "$(mktemp)" false; echo survived' > /dev/null 2>&1; then
   fail "retry_capture: a failed command passed under bash -e without pipefail"
 fi

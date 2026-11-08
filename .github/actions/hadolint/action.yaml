@@ -12,23 +12,34 @@ inputs:
 runs:
   using: composite
   steps:
+    # A failed download skips the lint with a warning, so a GitHub outage does not stop a build.
     - name: install hadolint
+      id: install
       shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RETRY_SH: ${{ github.action_path }}/../../../scripts/retry.sh
       run: |
         set -euo pipefail
+        source "$RETRY_SH"
         case "$(uname -m)" in
           aarch64) arch=arm64 ;;
           x86_64) arch=x86_64 ;;
           *) echo "::error::unsupported runner architecture $(uname -m)" && exit 1 ;;
         esac
         dir="$(mktemp -d)"
-        curl -fsSL -o "$dir/hadolint" \
-          "https://github.com/hadolint/hadolint/releases/download/v2.12.0/hadolint-Linux-${arch}"
+        if ! retry_release_download hadolint/hadolint v2.12.0 "$dir" "hadolint-Linux-${arch}"; then
+          echo "::warning::hadolint could not be downloaded from GitHub, so the Dockerfiles were not linted"
+          exit 0
+        fi
+        mv "$dir/hadolint-Linux-${arch}" "$dir/hadolint"
         chmod +x "$dir/hadolint"
         echo "$dir" >> "$GITHUB_PATH"
         "$dir/hadolint" --version
+        echo "installed=true" >> "$GITHUB_OUTPUT"
 
     - name: hadolint
+      if: steps.install.outputs.installed == 'true'
       shell: bash
       env:
         DOCKERFILES: ${{ inputs.dockerfiles }}
