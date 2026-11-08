@@ -1,0 +1,92 @@
+name: Trivy scan
+description: >-
+  Scans an image with a pinned Trivy and reports fixable HIGH and CRITICAL findings. When Trivy
+  cannot be downloaded from GitHub, it skips the scan with a warning. Registry credentials come
+  from the caller's TRIVY_USERNAME and TRIVY_PASSWORD, and TRIVY_PLATFORM picks one image out of
+  an index.
+inputs:
+  image-ref:
+    description: The image to scan, by tag or digest
+    required: true
+  skip-dirs:
+    description: Comma-separated image paths the scanner skips entirely
+    required: false
+    default: ''
+runs:
+  using: composite
+  steps:
+    - name: pin the Trivy version
+      id: pin
+      shell: bash
+      env:
+        TRIVY_VERSION: v0.70.0  # renovate.json5 bumps this
+      run: |
+        echo "version=$TRIVY_VERSION" >> "$GITHUB_OUTPUT"
+        echo "dir=$HOME/.local/bin/trivy-bin" >> "$GITHUB_OUTPUT"
+
+    # The key and the path are the ones aquasecurity/setup-trivy uses, so a binary that a caller
+    # cached before this action existed is still found.
+    - name: restore Trivy from the cache
+      id: cache
+      uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+      with:
+        path: ${{ steps.pin.outputs.dir }}
+        key: trivy-binary-${{ steps.pin.outputs.version }}-${{ runner.os }}-${{ runner.arch }}
+
+    # A failed download skips the scan with a warning, so a GitHub outage does not stop a release.
+    # A checksum mismatch is not an outage and fails the step.
+    - name: install Trivy
+      id: install
+      shell: bash
+      env:
+        GH_TOKEN: ${{ github.token }}
+        RETRY_SH: ${{ github.action_path }}/../../../scripts/retry.sh
+        CACHE_HIT: ${{ steps.cache.outputs.cache-hit }}
+        VERSION: ${{ steps.pin.outputs.version }}
+        DIR: ${{ steps.pin.outputs.dir }}
+      run: |
+        set -euo pipefail
+        source "$RETRY_SH"
+        if [ "$CACHE_HIT" != true ]; then
+          case "$(uname -m)" in
+            aarch64) arch=ARM64 ;;
+            x86_64) arch=64bit ;;
+            *) echo "::error::unsupported runner architecture $(uname -m)" && exit 1 ;;
+          esac
+          tarball="trivy_${VERSION#v}_Linux-${arch}.tar.gz"
+          checksums="trivy_${VERSION#v}_checksums.txt"
+          tmp="$(mktemp -d)"
+          if ! retry_release_download aquasecurity/trivy "$VERSION" "$tmp" "$tarball" "$checksums"; then
+            echo "::warning::Trivy could not be downloaded from GitHub, so the image was not scanned"
+            exit 0
+          fi
+          (cd "$tmp" && sha256sum --check --ignore-missing "$checksums")
+          mkdir -p "$DIR"
+          tar -xzf "$tmp/$tarball" -C "$DIR" trivy
+          echo "downloaded=true" >> "$GITHUB_OUTPUT"
+        fi
+        echo "$DIR" >> "$GITHUB_PATH"
+        "$DIR/trivy" --version
+        echo "installed=true" >> "$GITHUB_OUTPUT"
+
+    - name: save Trivy to the cache
+      if: steps.install.outputs.downloaded == 'true'
+      uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+      with:
+        path: ${{ steps.pin.outputs.dir }}
+        key: ${{ steps.cache.outputs.cache-primary-key }}
+
+    # Report-only until every repo has a week of output to review and a .trivyignore for whatever
+    # it decides to carry. Enforcing is then a one-line change to exit-code.
+    - name: scan the image
+      if: steps.install.outputs.installed == 'true'
+      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+      with:
+        image-ref: ${{ inputs.image-ref }}
+        skip-dirs: ${{ inputs.skip-dirs }}
+        skip-setup-trivy: true
+        format: table
+        exit-code: '0'
+        ignore-unfixed: true
+        vuln-type: os,library
+        severity: CRITICAL,HIGH

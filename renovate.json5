@@ -3,8 +3,8 @@
   // the API from the default branch, so it resolves independently of the checkout.
   // Which manager owns what:
   //   github-actions  the action pins in .github/workflows/*.yaml and .github/actions/*/action.yaml
-  //   regex           the renovate npm pin behind validate-renovate-config, and the Copilot CLI
-  //                   npm pin behind renovate-bc-check
+  //   regex           the renovate npm pin behind validate-renovate-config, the Copilot CLI
+  //                   npm pin behind renovate-bc-check, and the Trivy release behind trivy-scan
   // Cadence is the cron in .github/workflows/renovate.yaml, not an internal `schedule`, so a manual
   // workflow_dispatch works too.
   //
@@ -26,6 +26,13 @@
       matchStrings: ["COPILOT_VERSION: (?<currentValue>\\S+)"],
       depNameTemplate: "@github/copilot",
       datasourceTemplate: "npm",
+    },
+    {
+      customType: "regex",
+      managerFilePatterns: [".github/actions/trivy-scan/action.yaml"],
+      matchStrings: ["TRIVY_VERSION: (?<currentValue>\\S+)"],
+      depNameTemplate: "aquasecurity/trivy",
+      datasourceTemplate: "github-releases",
     },
   ],
 }

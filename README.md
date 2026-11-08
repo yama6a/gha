@@ -425,6 +425,27 @@ finding still fails the step.
   #   dockerfiles: .build/Dockerfile   # default discovers Dockerfile* recursively
 ```
 
+### `actions/trivy-scan`
+
+Pinned Trivy over one image, report-only: it prints fixable HIGH and CRITICAL findings and passes.
+The binary is cached in the Actions cache. On a cache miss the download from GitHub gets three
+tries in about a minute, then the action skips the scan with a warning. The release workflows run
+it. Renovate bumps `TRIVY_VERSION` in the action.
+
+```yaml
+- uses: yama6a/gha/.github/actions/trivy-scan@v2
+  env:
+    TRIVY_USERNAME: ${{ github.actor }}  # only for a private image
+    TRIVY_PASSWORD: ${{ secrets.GITHUB_TOKEN }}
+  with:
+    image-ref: ghcr.io/owner/repo:1
+```
+
+| input | default |
+|---|---|
+| `image-ref` | required |
+| `skip-dirs` | none; comma-separated image paths Trivy skips |
+
 ### `actions/kubeconform`
 
 Pinned kubeconform. With `paths` it validates them; without, it only installs and exports the
