@@ -67,7 +67,7 @@ docker_patterns='' run_case "empty pattern retries a build error" "5 15" docker-
 docker_patterns='' run_case "empty pattern gives up after the last try" "5 15" docker-build-error.log 7 9 7 3
 
 # A fake gh for retry_release_download: it records its arguments and fails the first $GH_FAILS calls.
-# shellcheck disable=SC2329  # retry_run calls it by name
+# shellcheck disable=SC2317,SC2329  # retry_run calls it by name
 gh() {
   echo "$*" > "$work/gh-args"
   flaky "$logs/gh-422.log" 1 "$GH_FAILS"
