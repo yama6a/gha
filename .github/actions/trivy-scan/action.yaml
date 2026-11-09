@@ -20,7 +20,7 @@ runs:
       id: pin
       shell: bash
       env:
-        TRIVY_VERSION: v0.70.0  # renovate.json5 bumps this
+        TRIVY_VERSION: v0.76.2  # renovate.json5 bumps this
       run: |
         echo "version=$TRIVY_VERSION" >> "$GITHUB_OUTPUT"
         echo "dir=$HOME/.local/bin/trivy-bin" >> "$GITHUB_OUTPUT"
