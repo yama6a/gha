@@ -34,7 +34,7 @@ runs:
       id: copilot
       shell: bash
       env:
-        COPILOT_VERSION: v1.0.108
+        COPILOT_VERSION: v1.0.109
         GH_TOKEN: ${{ github.token }}
         RETRY_SH: ${{ github.action_path }}/../../../scripts/retry.sh
       run: |
