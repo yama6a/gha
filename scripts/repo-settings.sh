@@ -13,6 +13,7 @@ claudetainer                | main   | false | public  | go / go,shell,yaml,reno
 codarr                      | main   | false | public  | go / go,node / node,renovate-config
 gha                         | main   | false | public  | yaml,renovate-presets,kubeconform,shell-checks,hadolint,helm-chart-checks
 gha-status-exporter         | main   | false | public  | release label,go / go,chart,yaml,renovate-config
+go-glyph-ocr                | main   | false | public  | release label,version check,go / go,amd64,fuzz,yaml,renovate-config
 longhorn-replica-affinity   | main   | false | public  | release label,go / go,chart,yaml,renovate-config
 offgrid                     | main   | false | public  | helm,shell,yaml,renovate-config,chart-tests
 offgrid-private             | main   | true  | private | helm,shell,yaml,renovate-config,chart-tests
