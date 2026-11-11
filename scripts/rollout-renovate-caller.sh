@@ -11,6 +11,7 @@ bolan-self-crawler          | main   |
 claudetainer                | main   |
 codarr                      | main   |
 gha-status-exporter         | main   |
+go-glyph-ocr                | main   |
 longhorn-replica-affinity   | main   |
 offgrid                     | main   | chart-lock
 offgrid-private             | main   | chart-lock
