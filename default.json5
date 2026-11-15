@@ -12,7 +12,9 @@
   ],
   "prConcurrentLimit": 12,
   "prHourlyLimit": 0, // no hourly throttle
-  "dependencyDashboardTitle": "Renovate dependency dashboard",
+  "dependencyDashboard": {
+    "title": "Renovate dependency dashboard"
+  },
 
   // GitHub's native auto-merge, armed when the PR is opened. GitHub merges once the required checks
   // are green, so one nightly run is enough. Every repo has required checks (scripts/repo-settings.sh);
