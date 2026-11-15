@@ -19,6 +19,7 @@ runs:
       env:
         GH_TOKEN: ${{ github.token }}
         RETRY_SH: ${{ github.action_path }}/../../../scripts/retry.sh
+        HADOLINT_VERSION: v2.15.1  # renovate.json5 bumps this
       run: |
         set -euo pipefail
         source "$RETRY_SH"
@@ -28,11 +29,11 @@ runs:
           *) echo "::error::unsupported runner architecture $(uname -m)" && exit 1 ;;
         esac
         dir="$(mktemp -d)"
-        if ! retry_release_download hadolint/hadolint v2.12.0 "$dir" "hadolint-Linux-${arch}"; then
+        if ! retry_release_download hadolint/hadolint "$HADOLINT_VERSION" "$dir" "hadolint-linux-${arch}"; then
           echo "::warning::hadolint could not be downloaded from GitHub, so the Dockerfiles were not linted"
           exit 0
         fi
-        mv "$dir/hadolint-Linux-${arch}" "$dir/hadolint"
+        mv "$dir/hadolint-linux-${arch}" "$dir/hadolint"
         chmod +x "$dir/hadolint"
         sudo ln -sf "$dir/hadolint" /usr/local/bin/hadolint
         hadolint --version
