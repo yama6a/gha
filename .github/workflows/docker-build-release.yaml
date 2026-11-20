@@ -43,8 +43,6 @@ on:
 
 env:
   IMAGE: ghcr.io/${{ github.repository }}
-  # The suffix keeps two calls of this workflow in one caller run off the same scan tag.
-  CI_TAG: ci-${{ github.run_id }}${{ inputs.tag-suffix }}
   SUFFIX: ${{ inputs.tag-suffix }}
 
 jobs:
@@ -111,7 +109,11 @@ jobs:
             tags+=" ${BASH_REMATCH[1]}.${BASH_REMATCH[2]}${SUFFIX} ${BASH_REMATCH[1]}${SUFFIX}"
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "tags=$tags" >> "$GITHUB_OUTPUT"
+          {
+            echo 'tags<<EOF'
+            for tag in $tags; do echo "${IMAGE}:${tag}"; done
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
 
       - name: Drop the shared actions checkout
         run: rm -rf .gha  # the build command sees the caller's checkout only
@@ -170,11 +172,9 @@ jobs:
             scripts/retry.sh
           sparse-checkout-cone-mode: false
 
-      # A two-platform QEMU build cannot --load a manifest list, so the scan runs against a pushed
-      # temp tag and the release tag is a manifest copy of it afterwards.
       # No cache-from or cache-to. The GHA layer cache restored nothing slow in any caller, took up to
       # 229s to export, and filled the 10 GB Actions cache. Measurements: https://github.com/yama6a/gha/pull/51
-      - name: Build and push the scan candidate
+      - name: Build and push the release tags
         uses: ./.gha/.github/actions/docker-build
         with:
           context: ${{ inputs.context }}
@@ -184,22 +184,8 @@ jobs:
           push: true
           provenance: mode=max
           sbom: true
-          tags: ${{ env.IMAGE }}:${{ env.CI_TAG }}
+          tags: ${{ steps.version.outputs.tags }}
           hide-path: .gha  # it would otherwise be part of the build context
-
-      # The ci-* tag is left in place on purpose: the release tag is a byte-identical copy with
-      # the same digest, and GHCR deletes by digest, so removing the ci-* package version
-      # would take the release tag with it.
-      - name: Promote the scanned image to the release tags
-        env:
-          TAGS: ${{ steps.version.outputs.tags }}
-        run: |
-          set -euo pipefail
-          args=()
-          for tag in $TAGS; do
-            args+=(-t "${IMAGE}:${tag}")
-          done
-          docker buildx imagetools create "${args[@]}" "${IMAGE}:${CI_TAG}"
 
       - name: Read the released digest
         id: released
