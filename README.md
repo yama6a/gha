@@ -148,8 +148,8 @@ jobs:
 ### `docker-build-release.yaml`
 
 hadolint, next integer version, optional `build-command`, multi-arch image to GHCR with provenance
-and SBOM, trivy scan, signed attestation (public repos only), GitHub release.
-Outputs `version`.
+and SBOM, signed attestation (public repos only), GitHub release.
+Outputs `version`. It does not scan the image. `image-scan.yaml` does that after the build.
 
 ```yaml
 permissions:
@@ -464,10 +464,10 @@ finding still fails the step.
 
 ### `actions/trivy-scan`
 
-Pinned Trivy over one image. It fails on HIGH and CRITICAL findings that have a fixed version, so
-a finding stops the release and the deploy. The binary is cached in the Actions cache. The download
-of the binary from GitHub and of the vulnerability database each get three tries in about a minute.
-When either still fails, the action skips the scan with a warning. The release workflows run it.
+Pinned Trivy over one image. It fails on HIGH and CRITICAL findings that have a fixed version.
+The binary is cached in the Actions cache. The download of the binary from GitHub and of the
+vulnerability database each get three tries in about a minute. When either still fails, the action
+skips the scan with a warning. `image-scan.yaml` runs it.
 Renovate bumps `TRIVY_VERSION` in the action.
 
 A caller can accept a finding in `.trivyignore` at the repo root, one CVE id per line with the
