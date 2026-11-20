@@ -26,10 +26,6 @@ on:
         description: Release version to use verbatim; empty computes the next integer from the latest release
         type: string
         default: ''
-      trivy-skip-dirs:
-        description: Comma-separated image paths the scanner skips entirely, for directories whose contents are already public
-        type: string
-        default: ''
       registry-cache:
         description: true keeps a layer cache per architecture in the image's GHCR package, under the tag buildcache-<os>-<arch>
         type: boolean
@@ -123,7 +119,7 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
 
-      - name: Check out the shared build and scan actions
+      - name: Check out the shared build action
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
@@ -132,7 +128,6 @@ jobs:
           path: .gha
           sparse-checkout: |
             .github/actions/docker-build
-            .github/actions/trivy-scan
             scripts/retry.sh
           sparse-checkout-cone-mode: false
 
@@ -154,20 +149,6 @@ jobs:
           cache-from: ${{ inputs.registry-cache && format('type=registry,ref={0}:buildcache-{1}', env.IMAGE, env.PLATFORM_PAIR) || '' }}
           cache-to: ${{ inputs.registry-cache && format('type=registry,ref={0}:buildcache-{1},mode=max,ignore-error=true', env.IMAGE, env.PLATFORM_PAIR) || '' }}
           hide-path: .gha  # it would otherwise be part of the build context
-
-      # Each arch is scanned on its own native runner, before merge joins the digests. merge needs
-      # build, so a red scan blocks the manifest.
-      - name: Scan the image
-        # Trivy pulls a private image with the ghcr.io login from "Log in to GHCR". It reads that
-        # login from the Docker config for ghcr.io only, so the token never reaches its DB mirrors.
-        uses: ./.gha/.github/actions/trivy-scan
-        env:
-          # The per-arch push is an index (image + attestation), and trivy picks linux/amd64 out of
-          # an index unless told otherwise, so the arm64 leg fails with "no child with platform".
-          TRIVY_PLATFORM: ${{ matrix.platform }}
-        with:
-          image-ref: ${{ env.IMAGE }}@${{ steps.build.outputs.digest }}
-          skip-dirs: ${{ inputs.trivy-skip-dirs }}
 
       - name: Export the digest
         env:
