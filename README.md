@@ -223,6 +223,40 @@ JSON array of `{platform, runner}` (default amd64 on `ubuntu-latest`, arm64 on `
 Every release also moves `latest`. `registry-cache: true` keeps a layer cache per architecture in
 the image's GHCR package, under the tag `buildcache-<os>-<arch>`.
 
+### `image-scan.yaml`
+
+Trivy over released images, apart from the build. A new CVE fails this run, and the
+GitHub Actions workflow failed alert fires for `image-scan.yaml`. The deploy has already run.
+The caller starts it in a workflow of its own, after its build workflow passed on the default branch:
+
+```yaml
+name: image-scan
+
+on:
+  workflow_run:  # zizmor: ignore[dangerous-triggers] the build runs on push to main only, and the scan checks out main
+    workflows: [build-and-push]
+    types: [completed]
+    branches: [main]
+
+permissions: {}
+
+jobs:
+  scan:
+    if: github.event.workflow_run.conclusion == 'success'
+    uses: yama6a/gha/.github/workflows/image-scan.yaml@v2
+    permissions:
+      contents: read  # reads .trivyignore of a private repo
+      packages: read  # pulls a private image
+```
+
+The workflow scans every platform in each tag's manifest list, one job per tag and platform.
+It reads `.trivyignore` from the default branch. A failed run reruns with `gh run rerun <id> --failed`.
+
+| input | default |
+|---|---|
+| `tags` | `latest`; space- or newline-separated tags of `ghcr.io/<repo>`, for example `latest whisper` for a release with `tag-suffix: -whisper` |
+| `skip-dirs` | none; comma-separated image paths Trivy skips |
+
 ### `go-release.yaml`
 
 Semver tag and GitHub release for a Go library on every merge to main. The bump comes from the
