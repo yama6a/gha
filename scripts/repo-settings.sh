@@ -5,6 +5,7 @@ set -euo pipefail
 # Contexts carry spaces and slashes, so fields are pipe-separated, contexts comma-separated.
 REPOS='
 airlock                     | main   | false | public  | shell,yaml,renovate-config,smoke,build
+alerts-api                  | main   | false | private | go / go,renovate-config
 bolan-admin-fe              | master | false | private | node / node,renovate-config
 bolan-api                   | main   | false | private | go / go,renovate-config
 bolan-fe                    | master | false | private | node / node,e2e / e2e,renovate-config
