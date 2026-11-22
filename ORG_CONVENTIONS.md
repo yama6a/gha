@@ -74,7 +74,7 @@ them report on a PR, so the PR sits pending forever.
 - `composer.lock` committed, refreshed on every run by Renovate's lock file maintenance.
 - a `test` composer script, and every other check CI runs is a composer script too.
 - `uses: yama6a/gha/.github/workflows/php-ci.yaml@v2`. Its default PHP versions are every
-  version that still gets security patches, now 8.2 to 8.5. A repo with a higher floor passes
+  version that still gets security patches, now 8.2 to 8.6. A repo with a higher floor passes
   `php-versions`.
 - a library releases through `php-release.yaml@v2`: bare `1.2.3` tags for Packagist, bumped by the
   strongest `major`, `minor` or `patch` label on the PRs merged since the last tag. The

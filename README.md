@@ -98,7 +98,7 @@ jobs:
 
 | input | default |
 |---|---|
-| `php-versions` | `["8.2", "8.3", "8.4", "8.5"]`; a JSON array |
+| `php-versions` | `["8.2", "8.3", "8.4", "8.5", "8.6"]`; a JSON array |
 | `extensions` | none; comma-separated, passed to `shivammathur/setup-php` |
 | `composer-scripts` | `test`; one script per line, run in order |
 | `runner` | `ubuntu-26.04-arm` |

@@ -6,7 +6,7 @@ on:
       php-versions:
         description: JSON array of PHP versions, one matrix shard each
         type: string
-        default: '["8.2", "8.3", "8.4", "8.5"]'
+        default: '["8.2", "8.3", "8.4", "8.5", "8.6"]'
       extensions:
         description: PHP extensions for shivammathur/setup-php, comma-separated
         type: string
