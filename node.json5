@@ -4,6 +4,14 @@
   // with ERESOLVE, so they have to travel in one PR. A hold that applies to one repo only belongs
   // in that repo's own config, not here.
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  // Renovate updates package-lock.json with `npm install --package-lock-only`. npm 12 has a bug in
+  // that mode: it refuses registry tarballs of packages with bundleDependencies when allow-remote
+  // is none, the npm 12 default. Tailwind 4 pulls in such a package, so the update fails with
+  // EALLOWREMOTE. Bug: https://github.com/npm/cli/issues/9800. This setting reaches Renovate only.
+  // CI and local installs keep the npm default. Remove both lines when an npm release ships the
+  // fix and the Renovate image runs it. Then check that a Renovate lockfile update in bolan-fe passes.
+  "npmrc": "allow-remote=all",
+  "npmrcMerge": true, // keep a repo's own .npmrc and add this line to it
   "packageRules": [
     {
       // typescript-eslint 8 declares `typescript >=4.8.4 <6.1.0`. TS 6 is outside the range but
