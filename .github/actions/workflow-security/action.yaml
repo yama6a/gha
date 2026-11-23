@@ -11,7 +11,7 @@ runs:
       shell: bash
       working-directory: ${{ github.workspace }}
       env:
-        ZIZMOR_VERSION: 1.32.0  # renovate.json5 bumps this
+        ZIZMOR_VERSION: 1.33.1  # renovate.json5 bumps this
         CONFIG: ${{ github.action_path }}/zizmor.yml
       run: |
         set -euo pipefail
