@@ -9,7 +9,7 @@ gha holds the shared workflows, composite actions and Renovate presets; `v2` is 
 |---|---|
 | default branch | left as is, `main` or `master`; nothing in gha reads it |
 | `renovate.json5` | extends `github>yama6a/gha:default.json5`, plus `go.json5`, `node.json5` or `php.json5` |
-| CI | go-ci, node-ci and php-ci validate the Renovate config as a step. Every other repo validates it inside its `yaml` job, or in a `renovate-config` job until it does |
+| CI | go-ci, node-ci and php-ci validate the Renovate config as a step. Every other repo validates it inside its `yaml` job |
 | `.yamllint.yml` | absent, unless the repo extends `ignore:` |
 | `.dockerignore` | next to every Dockerfile |
 | `.editorconfig` | none |
@@ -37,7 +37,7 @@ Applied by `scripts/repo-settings.sh`, not by hand.
 | label-driven semver release | `release label` |
 | Playwright | `e2e / e2e` |
 | shell and config repos | `shell`, `yaml` |
-| repo without go-ci, node-ci or php-ci and without a `yaml` job that validates the config | `renovate-config` |
+| offgrid, offgrid-private | `ci` |
 
 Never require a conditional job, a single matrix shard, or a job from a push-only workflow: none of
 them report on a PR, so the PR sits pending forever.

@@ -783,8 +783,8 @@ jobs:
 
 Pinned `renovate-config-validator --strict`. go-ci, node-ci and php-ci run it as a step with no
 inputs, so a caller needs no `renovate-config` job. On `pull_request` and `push` it first diffs the
-changed files and skips the validator (the step, not the job, so a required `renovate-config`
-check still reports green) unless a config file changed. Every other event validates.
+changed files and skips the validator (the step, not the job, so the calling job still reports
+green) unless a config file changed. Every other event validates.
 The diff base is the pull request's base commit, or the push's `before` commit. A push that
 creates a branch or tag has no `before`, so it validates.
 

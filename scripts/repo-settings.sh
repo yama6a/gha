@@ -4,30 +4,30 @@ set -euo pipefail
 # repo | default branch | merge commits | visibility | required status check contexts
 # Contexts carry spaces and slashes, so fields are pipe-separated, contexts comma-separated.
 REPOS='
-airlock                     | main   | false | public  | shell,yaml,renovate-config,smoke,build
-alerts-api                  | main   | false | private | go / go,renovate-config
-bolan-admin-fe              | master | false | private | node / node,renovate-config
-bolan-api                   | main   | false | private | go / go,renovate-config
-bolan-fe                    | master | false | private | node / node,e2e / e2e,renovate-config
-claudetainer                | main   | false | public  | go / go,shell,yaml,renovate-config,build-amd64,build-arm64
-codarr                      | main   | false | public  | go / go,node / node,renovate-config
+airlock                     | main   | false | public  | shell,yaml,smoke,build
+alerts-api                  | main   | false | private | go / go
+bolan-admin-fe              | master | false | private | node / node
+bolan-api                   | main   | false | private | go / go
+bolan-fe                    | master | false | private | node / node,e2e / e2e
+claudetainer                | main   | false | public  | go / go,shell,yaml,build-amd64,build-arm64
+codarr                      | main   | false | public  | go / go,node / node
 gha                         | main   | false | public  | yaml,renovate-presets,kubeconform,shell-checks,hadolint,helm-chart-checks
-gha-status-exporter         | main   | false | public  | release label,go / go,chart,yaml,renovate-config
-go-glyph-ocr                | main   | false | public  | release label,version check,go / go,amd64,fuzz,yaml,renovate-config
-longhorn-replica-affinity   | main   | false | public  | release label,go / go,chart,yaml,renovate-config
-offgrid                     | main   | false | public  | helm,shell,yaml,renovate-config,chart-tests
-offgrid-private             | main   | true  | private | helm,shell,yaml,renovate-config,chart-tests
-php-glyph-ocr               | main   | false | public  | release label,php / php,yaml,renovate-config
-pgsandbox                   | main   | false | public  | go / go,renovate-config
-pi5-k8s-sample-app          | main   | false | public  | go / go,renovate-config
-pontiki-website             | main   | false | private | node / node,links,renovate-config
-praxis                      | main   | false | private | node / node,renovate-config
-subtitle-toolbox-php        | master | false | public  | release label,php / php,tesseract,yaml,renovate-config
-subtitle-toolbox-go         | main   | false | public  | release label,version check,gorelease,go / go,cross-compile,fuzz,bench,smoke,docker / docker,shell,yaml,renovate-config
-tagesschau-reader           | main   | false | public  | node / node,renovate-config
-tales-ingest                | main   | false | private | go / go,coverage,cross-compile,docker / docker,smoke-kraken,smoke-paddle,smoke-ndlocr,smoke-bdrc,shell,yaml,renovate-config
-talos-raspberry-pi5         | main   | false | public  | shell,yaml,renovate-config,main-is-green,preflight
-talos-raspberry-pi5-cluster | main   | false | public  | shell,yaml,renovate-config
+gha-status-exporter         | main   | false | public  | release label,go / go,chart,yaml
+go-glyph-ocr                | main   | false | public  | release label,version check,go / go,amd64,fuzz,yaml
+longhorn-replica-affinity   | main   | false | public  | release label,go / go,chart,yaml
+offgrid                     | main   | false | public  | ci
+offgrid-private             | main   | true  | private | ci
+php-glyph-ocr               | main   | false | public  | release label,php / php,yaml
+pgsandbox                   | main   | false | public  | go / go
+pi5-k8s-sample-app          | main   | false | public  | go / go
+pontiki-website             | main   | false | private | node / node,links
+praxis                      | main   | false | private | node / node
+subtitle-toolbox-php        | master | false | public  | release label,php / php,tesseract,yaml
+subtitle-toolbox-go         | main   | false | public  | release label,version check,gorelease,go / go,cross-compile,fuzz,bench,smoke,docker / docker,docker-tesseract / docker,tesseract,shell,yaml
+tagesschau-reader           | main   | false | public  | node / node
+tales-ingest                | main   | false | private |
+talos-raspberry-pi5         | main   | false | public  | shell,yaml,main-is-green,preflight
+talos-raspberry-pi5-cluster | main   | false | public  | shell,yaml
 '
 
 OWNER=yama6a
@@ -261,7 +261,7 @@ verify_repo() {
         ] | map(tostring) | join(" ")' <<< "$prot")"
 
     cmp_field protection.strict false "$p_strict"
-    cmp_field protection.contexts "$(join_sorted_contexts)" \
+    cmp_field protection.contexts "$(join_sorted_contexts | sed 's/^$/none/')" \
       "$(jq -r '(.required_status_checks.contexts // []) | sort | join(",") | if . == "" then "none" else . end' <<< "$prot")"
     cmp_field protection.enforce_admins false "$p_admins"
     cmp_field protection.required_pull_request_reviews null "$p_reviews"
