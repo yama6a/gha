@@ -14,21 +14,22 @@ workflow's job carries the same `name:`, so the context is `go / go`, `node / no
 
 The `check` mode runs tidy drift, generate drift, `actions/workflow-security`, golangci-lint with
 the canonical `.golangci.yaml` from this repo, `actions/validate-renovate-config`, fmt, vet,
-`go test -race -count=1` with coverage, govulncheck, and a cross-compile for amd64 and arm64 with
+`go test -count=1` with coverage, govulncheck, and a cross-compile for amd64 and arm64 with
 `-trimpath`. golangci-lint is pinned in `GOLANGCI_LINT_VERSION`, and Renovate bumps it.
 
 ```yaml
 jobs:
   go:
     uses: yama6a/gha/.github/workflows/go-ci.yaml@v2
-    # with:
-    #   race: false
 ```
+
+A PR run never uses `-race`. Every Go repo runs the race tests weekly through `race.yaml` below. A
+failed weekly run alerts through gha-status-exporter.
 
 | input | default |
 |---|---|
 | `mode` | `check`; `race` and `warm-cache` are for the scheduled workflows below |
-| `race` | `true`; `false` drops `-race` from the `check` mode's tests and the `warm-cache` mode's test builds |
+| `race` | `false`; `true` adds `-race` to the `check` mode's tests and the `warm-cache` mode's test builds. Callers leave it unset |
 
 The job is named `go` in every mode, so the required context stays `go / go`.
 
@@ -36,14 +37,14 @@ The job is named `go` in every mode, so the required context stays `go / go`.
 |---|---|---|
 | `check` | every check above | the Go caches on a miss of the exact key, and the lint cache. Never from a `pull_request` |
 | `race` | `go test ./... -race -count=1` only | nothing |
-| `warm-cache` | golangci-lint. On a miss of the exact Go cache key also `go mod download`, `go build ./...`, the test packages through `go test -c -cover` without running them, with `-race` unless `race: false`, and the cross-compile | the Go caches on a miss, and the lint cache |
+| `warm-cache` | golangci-lint. On a miss of the exact Go cache key also `go mod download`, `go build ./...`, the test packages through `go test -c -cover` without running them, with `-race` only when `race: true`, and the cross-compile | the Go caches on a miss, and the lint cache |
 
 A PR run can read only the caches saved on the default branch. GitHub drops an entry after 7 days
 without use, and the golangci-lint key changes every 7 days. So the caller runs `check` on
 `pull_request` only, and a weekly `warm-cache` run fills both caches:
 
-- The test packages compile with the `check` mode's flags for the same `race` input, so PR runs
-  reuse them. Pass the same `race` value in `warm-cache.yaml` as in the PR workflow.
+- The `warm-cache` mode follows the `race` input. With the default `false` it builds test binaries
+  without `-race`, which are the ones PR runs reuse.
 - docker-build-release.yaml reads the same cache entries, because its release build uses the
   cross-compile flags.
 
@@ -64,10 +65,9 @@ jobs:
     uses: yama6a/gha/.github/workflows/go-ci.yaml@v2
     with:
       mode: warm-cache
-      # race: false  # the same value as the PR workflow
 ```
 
-A repo that passes `race: false` also runs the race tests weekly on the default branch:
+Every Go repo runs the race tests weekly on the default branch:
 
 ```yaml
 # .github/workflows/race.yaml
