@@ -142,6 +142,7 @@ jobs:
 |---|---|
 | `working-directory` | `.` |
 | `build-env` | none; newline `KEY=VALUE`, exported for the build step only |
+| `upload-build` | none; upload-artifact paths, relative to the repo root. When set, the build output goes up as artifact `node-build` for `playwright-e2e.yaml` |
 | `runner` | `ubuntu-24.04-arm` |
 | `warm-cache` | `false`; `true` runs only `npm ci` and saves the npm store |
 
@@ -197,25 +198,34 @@ jobs:
 
 ### `playwright-e2e.yaml`
 
-Builds once, uploads the build, runs the suite sharded. Required check is the gate job, `e2e / e2e`;
-shards are not required, so `shard-total` can change freely.
+Runs the suite sharded, against the build that `node-ci.yaml` uploads as artifact `node-build` in
+the same run. So the caller passes `upload-build` to node-ci, and the e2e job needs the node job.
+Required check is the gate job, `e2e / e2e`. Shards are not required, so `shards` can change freely.
 
 ```yaml
 jobs:
-  e2e:
-    uses: yama6a/gha/.github/workflows/playwright-e2e.yaml@v2
+  node:
+    uses: yama6a/gha/.github/workflows/node-ci.yaml@v2
     with:
       build-env: |
         NEXT_PUBLIC_USE_MOCK_DATA=true
+      upload-build: |
+        .next
+        !.next/cache
+        !.next/standalone
+  e2e:
+    needs: node
+    uses: yama6a/gha/.github/workflows/playwright-e2e.yaml@v2
+    with:
+      shards: '[1, 2]'
 ```
 
 | input | default |
 |---|---|
-| `shard-total` | `4` |
+| `shards` | `[1, 2]`; a JSON array, one job per shard |
 | `runner` | `ubuntu-24.04-arm`; must match the warm-cache caller, the cache key includes the arch |
 | `working-directory` | `.` |
-| `build-env` | none |
-| `build-artifact-paths` | `.next`, `!.next/cache`, `!.next/standalone`; first non-`!` line is the download target |
+| `build-artifact-paths` | `.next`, `!.next/cache`, `!.next/standalone`; the `upload-build` paths given to node-ci. The first non-`!` line is the download target |
 | `browser` | `chromium` |
 | `warm-cache` | `false`; run only the cache-priming job |
 

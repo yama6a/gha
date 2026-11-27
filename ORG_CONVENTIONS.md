@@ -126,6 +126,8 @@ them report on a PR, so the PR sits pending forever.
   `.npm-audit-ignore`, one GHSA id per line, reason after a `#`.
 - Playwright through `playwright-e2e.yaml@v2`, with a caller-side `.github/workflows/warm-cache.yaml`
   that fills the shared npm and browser cache.
+- The e2e job runs on the node job's build. The node job passes `upload-build`, and the e2e job
+  has `needs: node`.
 - serving image and framework are per project.
 
 ## Shell
