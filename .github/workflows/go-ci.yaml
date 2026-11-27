@@ -49,11 +49,11 @@ jobs:
             ~/go/pkg/mod
             ~/.cache/go-build
           # docker-build-release.yaml restores the same paths and keys read-only. Change both files together.
-          key: go-v1-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('**/go.sum') }}
-          # Bump go-v1 to drop the old module versions a prefix match keeps carrying forward.
+          key: go-v2-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('**/go.sum') }}
+          # Bump go-v2 when the cached build flags change (-race, -trimpath), or to drop old module versions a prefix match keeps.
           restore-keys: |
-            go-v1-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-
-            go-v1-${{ runner.arch }}-
+            go-v2-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-
+            go-v2-${{ runner.arch }}-
 
       # A stale go.mod/go.sum still builds, so nothing else here would catch it.
       # Runs before go generate, which can edit go.mod through `go run -mod=mod`.

@@ -164,10 +164,11 @@ jobs:
             ~/go/pkg/mod
             ~/.cache/go-build
           # Paths, key and restore-keys must equal the restore step in go-ci.yaml, or this never hits.
-          key: go-v1-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('**/go.sum') }}
+          # The go-v2 prefix bumps when the cached build flags change (-race, -trimpath).
+          key: go-v2-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('**/go.sum') }}
           restore-keys: |
-            go-v1-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-
-            go-v1-${{ runner.arch }}-
+            go-v2-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-
+            go-v2-${{ runner.arch }}-
 
       # Built here, not in the Dockerfile: the image only COPYs the build output, so this runs once on the
       # runner instead of once per target arch under emulation.
