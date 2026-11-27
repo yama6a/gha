@@ -13,7 +13,7 @@ workflow's job carries the same `name:`, so the context is `go / go`, `node / no
 ### `go-ci.yaml`
 
 No inputs. Tidy drift, generate drift, `actions/workflow-security`, golangci-lint with the
-canonical `.golangci.yaml` from this repo, fmt, vet, `go test -race -count=1` with coverage,
+canonical `.golangci.yaml` from this repo, `actions/validate-renovate-config`, fmt, vet, `go test -race -count=1` with coverage,
 govulncheck, cross-compile amd64 and arm64. golangci-lint is pinned in `GOLANGCI_LINT_VERSION`,
 and Renovate bumps it.
 The module and build caches are restored on every run and saved only from runs that are not a
@@ -47,7 +47,8 @@ CI agree.
 
 `npm ci`, then the scripts `generate` (followed by `git diff --exit-code`), `lint`,
 `format:check`, `typecheck`, `test`, then `actions/workflow-security`,
-`npm audit --audit-level=high`, `build`. Node version from `.nvmrc`. Every script must exist;
+`npm audit --audit-level=high`, `build`, then `actions/validate-renovate-config`. It runs last
+because it pins Node 24 on PATH. Node version from `.nvmrc`. Every script must exist;
 `"exit 0"` where a project has nothing to do.
 
 The audit runs through `scripts/npm-audit.sh`. It fails on the same findings as
@@ -80,7 +81,8 @@ jobs:
 ### `php-ci.yaml`
 
 One job per PHP version: `composer validate --strict`, `composer install`, `composer audit`, then
-each composer script in `composer-scripts`. The job `php` passes only when every version passed.
+each composer script in `composer-scripts`. The first version in `php-versions` also runs
+`actions/validate-renovate-config`. The job `php` passes only when every version passed.
 It is the required check, `php / php`. The per-version jobs are not required, so the version list
 can change freely.
 
@@ -645,7 +647,8 @@ jobs:
 
 ### `actions/validate-renovate-config`
 
-Pinned `renovate-config-validator --strict`. On `pull_request` and `push` it first diffs the
+Pinned `renovate-config-validator --strict`. go-ci, node-ci and php-ci run it as a step with no
+inputs, so a caller needs no `renovate-config` job. On `pull_request` and `push` it first diffs the
 changed files and skips the validator (the step, not the job, so a required `renovate-config`
 check still reports green) unless a config file changed. Every other event validates.
 

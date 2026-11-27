@@ -72,12 +72,16 @@ jobs:
           sparse-checkout: |
             .golangci.yaml
             .github/actions/workflow-security
+            .github/actions/validate-renovate-config
             scripts/govulncheck.sh
             scripts/retry.sh
           sparse-checkout-cone-mode: false  # cone mode selects directories, not single files
 
       - name: Check workflow security
         uses: ./.gha/.github/actions/workflow-security
+
+      - name: Validate the Renovate config
+        uses: ./.gha/.github/actions/validate-renovate-config
 
       # Installed here with the job token rather than by golangci-lint-action, which downloads from
       # GitHub without one.
