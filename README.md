@@ -12,18 +12,83 @@ workflow's job carries the same `name:`, so the context is `go / go`, `node / no
 
 ### `go-ci.yaml`
 
-No inputs. Tidy drift, generate drift, `actions/workflow-security`, golangci-lint with the
-canonical `.golangci.yaml` from this repo, `actions/validate-renovate-config`, fmt, vet, `go test -race -count=1` with coverage,
-govulncheck, cross-compile amd64 and arm64. golangci-lint is pinned in `GOLANGCI_LINT_VERSION`,
-and Renovate bumps it.
-The module and build caches are restored on every run and saved only from runs that are not a
-`pull_request`, so keep the caller's `push: branches: [main]` trigger.
+The `check` mode runs tidy drift, generate drift, `actions/workflow-security`, golangci-lint with
+the canonical `.golangci.yaml` from this repo, `actions/validate-renovate-config`, fmt, vet,
+`go test -race -count=1` with coverage, govulncheck, and a cross-compile for amd64 and arm64 with
+`-trimpath`. golangci-lint is pinned in `GOLANGCI_LINT_VERSION`, and Renovate bumps it.
 
 ```yaml
 jobs:
   go:
     uses: yama6a/gha/.github/workflows/go-ci.yaml@v2
+    # with:
+    #   race: false
 ```
+
+| input | default |
+|---|---|
+| `mode` | `check`; `race` and `warm-cache` are for the scheduled workflows below |
+| `race` | `true`; `false` drops `-race` from the `check` mode's tests |
+
+The job is named `go` in every mode, so the required context stays `go / go`.
+
+| mode | runs | saves |
+|---|---|---|
+| `check` | every check above | the Go caches on a miss of the exact key, and the lint cache. Never from a `pull_request` |
+| `race` | `go test ./... -race -count=1` only | nothing |
+| `warm-cache` | golangci-lint. On a miss of the exact Go cache key also `go mod download`, `go build ./...`, the test packages through `go test -c -cover` without running them, and the cross-compile | the Go caches on a miss, and the lint cache |
+
+A PR run can read only the caches saved on the default branch. GitHub drops an entry after 7 days
+without use, and the golangci-lint key changes every 7 days. So the caller runs `check` on
+`pull_request` only, and a weekly `warm-cache` run fills both caches:
+
+- The test packages compile with `-cover` and without `-race`. A `check` run with `race: false`
+  reuses them. With `race: true`, a PR compiles the race builds of the test packages itself.
+- docker-build-release.yaml reads the same cache entries, because its release build uses the
+  cross-compile flags.
+
+```yaml
+# .github/workflows/warm-cache.yaml
+name: warm-cache
+on:
+  schedule:
+    - cron: '23 3 * * 1'  # a different minute in each repo
+  workflow_dispatch:
+concurrency:
+  group: warm-cache
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  go:
+    uses: yama6a/gha/.github/workflows/go-ci.yaml@v2
+    with:
+      mode: warm-cache
+```
+
+A repo that passes `race: false` also runs the race tests weekly on the default branch:
+
+```yaml
+# .github/workflows/race.yaml
+name: race
+on:
+  schedule:
+    - cron: '41 3 * * 4'  # a different minute in each repo
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  go:
+    uses: yama6a/gha/.github/workflows/go-ci.yaml@v2
+    with:
+      mode: race
+```
+
+- Pick a minute other than `0`. GitHub delays scheduled runs at the start of an hour, when its load
+  peaks.
+- Start `warm-cache.yaml` once by hand after adding it, so PRs find a cache before the first
+  scheduled run: `gh workflow run warm-cache.yaml`.
+- GitHub disables scheduled workflows in a public repo after 60 days without activity.
 
 govulncheck runs through `scripts/govulncheck.sh`, which fails on the same findings plain
 govulncheck exits 3 on: a vulnerability your code actually calls. A caller can allowlist an id in
@@ -225,8 +290,8 @@ COPY dist/linux-${TARGETARCH}/myapp /myapp
   go-ci fills the cache with these flags, and any other compile flag misses it. `-ldflags` only
   changes the link step, so `-ldflags='-s -w'` still hits.
 - Write `dist/linux-<arch>/<binary>` for every arch in `platforms`.
-- The cache is read-only here. go-ci saves it only from runs outside a pull request, so the
-  caller runs go-ci on the default branch.
+- The cache is read-only here. The caller fills it with go-ci's weekly `warm-cache` mode, as the
+  `go-ci.yaml` section shows.
 - A Dockerfile whose target stage only COPYs needs no QEMU on the arm runner. A `RUN` in the
   amd64 stage runs under emulation.
 

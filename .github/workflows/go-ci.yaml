@@ -2,13 +2,32 @@ name: Go PR CI (reusable)
 
 on:
   workflow_call:
+    inputs:
+      mode:
+        description: check runs every check, race runs only the race tests, warm-cache fills the caches PRs read
+        type: string
+        default: check
+      race:
+        description: Run the check mode's tests with the race detector
+        type: boolean
+        default: true
 
 jobs:
   check:
-    name: go  # a required-check context; the steps grow, this does not
+    name: go  # a required-check context in every mode; the steps grow, this does not
     runs-on: ubuntu-26.04-arm
     timeout-minutes: 30  # the cache trim below assumes the run finishes well inside 90 minutes
     steps:
+      # Most later steps test the mode, so a misspelt one would skip them and pass green.
+      - name: Check the mode
+        env:
+          MODE: ${{ inputs.mode }}
+        run: |
+          case "$MODE" in
+            check | race | warm-cache) ;;
+            *) echo "::error::mode must be check, race or warm-cache, not '$MODE'"; exit 1 ;;
+          esac
+
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -36,9 +55,21 @@ jobs:
             go-v1-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-
             go-v1-${{ runner.arch }}-
 
+      - name: Look up the exact Go cache key
+        if: inputs.mode == 'warm-cache'
+        id: gokey
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          key: ${{ steps.gocache.outputs.cache-primary-key }}
+          lookup-only: true
+
       # A stale go.mod/go.sum still builds, so nothing else here would catch it.
       # Runs before go generate, which can edit go.mod through `go run -mod=mod`.
       - name: go mod tidy is committed
+        if: inputs.mode == 'check'
         run: |
           set -euo pipefail
           go mod tidy
@@ -49,6 +80,7 @@ jobs:
       # compiles green and ships the wrong contract. The diff covers the whole
       # tree, not just the generated files, to catch a generator that edits go.mod.
       - name: go generate output is committed
+        if: inputs.mode == 'check'
         run: |
           set -euo pipefail
           go generate ./...
@@ -64,6 +96,7 @@ jobs:
       # job.workflow_sha is this reusable workflow's own commit, so a caller pinned
       # to @v2 gets the v2 config and never main's.
       - name: Fetch the canonical config and scripts
+        if: inputs.mode != 'race'
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
@@ -79,14 +112,17 @@ jobs:
           sparse-checkout-cone-mode: false  # cone mode selects directories, not single files
 
       - name: Check workflow security
+        if: inputs.mode == 'check'
         uses: ./.gha/.github/actions/workflow-security
 
       - name: Validate the Renovate config
+        if: inputs.mode == 'check'
         uses: ./.gha/.github/actions/validate-renovate-config
 
       # Installed here with the job token rather than by golangci-lint-action, which downloads from
       # GitHub without one.
       - name: Install golangci-lint
+        if: inputs.mode != 'race'
         env:
           GH_TOKEN: ${{ github.token }}
           GOLANGCI_LINT_VERSION: v2.15.0  # renovate.json5 bumps this
@@ -103,6 +139,7 @@ jobs:
       # `*+` appends arrays, so .golangci.local.yaml lists only its additions. .gha goes away
       # here so the cross-compile and any later git diff never see it.
       - name: Stage the lint config and scripts
+        if: inputs.mode != 'race'
         run: |
           set -euo pipefail
           if [ -f .golangci.yaml ] || [ -f .golangci.yml ]; then
@@ -119,7 +156,9 @@ jobs:
           install -m 0755 .gha/scripts/govulncheck.sh /tmp/govulncheck.sh
           rm -rf .gha
 
+      # Its cache key changes every 7 days, so warm-cache runs it even when the Go cache key exists.
       - name: Run golangci-lint
+        if: inputs.mode != 'race'
         uses: golangci/golangci-lint-action@ba0d7d2ec06a0ea1cb5fa41b2e4a3ab91d21278a  # v9.3.0
         with:
           install-mode: none
@@ -129,35 +168,67 @@ jobs:
       # `run` does not enforce the formatters, so check them separately. Without
       # -c this only runs gofmt, and gofumpt and goimports go unchecked.
       - name: Check formatting
+        if: inputs.mode == 'check'
         run: golangci-lint fmt --diff -c /tmp/golangci.yaml
 
       - name: Run go vet
+        if: inputs.mode == 'check'
         run: go vet ./...
 
       # The restore step brings back GOCACHE, so without -count=1 go test serves cached results.
       # The race runtime sleeps 1s at exit of every test binary to catch races in goroutines
       # still running; with 60 packages that is a minute of CI, so it is off here.
       - name: Run go test
+        if: inputs.mode != 'warm-cache'
         env:
           GORACE: atexit_sleep_ms=0
-        run: go test ./... -race -count=1 -coverprofile=cover.out
+          MODE: ${{ inputs.mode }}
+          RACE: ${{ inputs.race }}
+        run: |
+          set -euo pipefail
+          if [ "$MODE" = race ]; then
+            go test ./... -race -count=1
+          elif [ "$RACE" = true ]; then
+            go test ./... -race -count=1 -coverprofile=cover.out
+          else
+            go test ./... -count=1 -coverprofile=cover.out
+          fi
 
       - name: Coverage summary
+        if: inputs.mode == 'check'
         run: go tool cover -func=cover.out | tail -1
 
       # Wrapped rather than called directly so a repo can allowlist an OSV id in
       # .govulncheck-ignore; the script explains when that is the only way out.
       - name: Run govulncheck
+        if: inputs.mode == 'check'
         run: /tmp/govulncheck.sh
 
+      - name: Download the modules
+        if: inputs.mode == 'warm-cache' && steps.gokey.outputs.cache-hit != 'true'
+        run: go mod download
+
+      - name: Build
+        if: inputs.mode == 'warm-cache' && steps.gokey.outputs.cache-hit != 'true'
+        run: go build ./...
+
+      # -c compiles without running anything. -run '^$' would still run a TestMain. -cover matches
+      # the check mode's -coverprofile without -race, so those PR runs hit these entries. /dev/null,
+      # because two packages of one name cannot both write into an -o directory.
+      - name: Build the test binaries
+        if: inputs.mode == 'warm-cache' && steps.gokey.outputs.cache-hit != 'true'
+        run: go test -c -cover -o /dev/null ./...
+
       # Every Go repo here ships a multi-arch image, and CI runs on one arch, so a
-      # compile error on the other would first surface at release time.
+      # compile error on the other would first surface at release time. The flags equal the
+      # release build's in docker-build-release.yaml, so it reads these cache entries.
       - name: Cross-compile
+        if: inputs.mode == 'check' || (inputs.mode == 'warm-cache' && steps.gokey.outputs.cache-hit != 'true')
         run: |
           set -euo pipefail
           pids=()
           for target in linux/amd64 linux/arm64; do
-            CGO_ENABLED=0 GOOS="${target%%/*}" GOARCH="${target##*/}" go build ./... > "/tmp/build-${target##*/}.log" 2>&1 &
+            CGO_ENABLED=0 GOOS="${target%%/*}" GOARCH="${target##*/}" go build -trimpath ./... > "/tmp/build-${target##*/}.log" 2>&1 &
             pids+=("$!")
           done
           rc=0
@@ -173,12 +244,12 @@ jobs:
 
       # Go bumps an entry's mtime on use, so this keeps only what this run touched.
       - name: Trim the Go build cache to what this run used
-        if: github.event_name != 'pull_request' && steps.gocache.outputs.cache-hit != 'true'
+        if: inputs.mode != 'race' && github.event_name != 'pull_request' && steps.gocache.outputs.cache-hit != 'true'
         run: find "$(go env GOCACHE)" -type f -mmin +90 -delete
 
       # Never from a pull_request: that scope is readable by the one PR and nothing after it.
       - name: Save the Go caches
-        if: github.event_name != 'pull_request' && steps.gocache.outputs.cache-hit != 'true'
+        if: inputs.mode != 'race' && github.event_name != 'pull_request' && steps.gocache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: |
