@@ -7,7 +7,7 @@ on:
   workflow_call:
     inputs:
       tags:
-        description: Space- or newline-separated tags of ghcr.io/<caller repo>; each tag and platform gets one scan job
+        description: Space- or newline-separated tags of ghcr.io/<caller repo>; one job scans every tag and platform
         type: string
         default: latest
       skip-dirs:
@@ -19,59 +19,12 @@ env:
   IMAGE: ghcr.io/${{ github.repository }}
 
 jobs:
-  # The platforms come from each tag's manifest list, so a caller never lists them a second time.
-  targets:
-    runs-on: ubuntu-26.04-arm
-    # A reusable workflow's jobs can request only what the caller grants here.
-    permissions:
-      packages: read  # reads the manifest list of a private image
-    outputs:
-      matrix: ${{ steps.list.outputs.matrix }}
-    steps:
-      - name: Log in to GHCR
-        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550  # v4.8.0
-        with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069  # v4.4.1
-
-      # Attestation manifests carry the platform unknown/unknown and are left out.
-      - name: List every tag and platform
-        id: list
-        env:
-          TAGS: ${{ inputs.tags }}
-        run: |
-          set -euo pipefail
-          entries=()
-          for tag in $TAGS; do
-            platforms=$(docker buildx imagetools inspect "${IMAGE}:${tag}" --raw \
-              | jq -r '.manifests[]?.platform | select(. != null and .os != "unknown") | "\(.os)/\(.architecture)"' \
-              | sort -u)
-            if [ -z "$platforms" ]; then
-              echo "::error::${IMAGE}:${tag} is not a manifest list with a platform"
-              exit 1
-            fi
-            for platform in $platforms; do
-              entries+=("$(jq -nc --arg tag "$tag" --arg platform "$platform" '{tag: $tag, platform: $platform}')")
-            done
-          done
-          echo "matrix=$(printf '%s\n' "${entries[@]}" | jq -sc .)" >> "$GITHUB_OUTPUT"
-
   scan:
-    needs: targets
-    strategy:
-      fail-fast: false
-      matrix:
-        include: ${{ fromJson(needs.targets.outputs.matrix) }}
-    name: scan (${{ matrix.tag }}, ${{ matrix.platform }})
     runs-on: ubuntu-26.04-arm
     # A reusable workflow's jobs can request only what the caller grants here.
     permissions:
       contents: read  # actions/checkout cannot read a private repo without it
-      packages: read  # Trivy pulls a private image
+      packages: read  # reads the manifest lists and pulls a private image
     steps:
       # Trivy reads the caller's .trivyignore from the working directory.
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -99,13 +52,37 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Scan the image
+      # The platforms come from each tag's manifest list, so a caller never lists them a second time.
+      # Attestation manifests carry the platform unknown/unknown and are left out.
+      - name: List every tag and platform
+        id: list
+        env:
+          TAGS: ${{ inputs.tags }}
+        run: |
+          set -euo pipefail
+          targets=""
+          for tag in $TAGS; do
+            platforms=$(docker buildx imagetools inspect "${IMAGE}:${tag}" --raw \
+              | jq -r '.manifests[]?.platform | select(. != null and .os != "unknown") | "\(.os)/\(.architecture)"' \
+              | sort -u)
+            if [ -z "$platforms" ]; then
+              echo "::error::${IMAGE}:${tag} is not a manifest list with a platform"
+              exit 1
+            fi
+            for platform in $platforms; do
+              targets+="${IMAGE}:${tag} ${platform}"$'\n'
+            done
+          done
+          {
+            echo "targets<<EOF"
+            printf '%s' "$targets"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Scan every tag and platform
         # Trivy pulls a private image with the ghcr.io login above. It reads that login from the
         # Docker config for ghcr.io only, so the token never reaches its DB mirrors.
         uses: ./.gha/.github/actions/trivy-scan
-        env:
-          # Trivy picks linux/amd64 out of a manifest list unless told otherwise.
-          TRIVY_PLATFORM: ${{ matrix.platform }}
         with:
-          image-ref: ${{ env.IMAGE }}:${{ matrix.tag }}
+          targets: ${{ steps.list.outputs.targets }}
           skip-dirs: ${{ inputs.skip-dirs }}

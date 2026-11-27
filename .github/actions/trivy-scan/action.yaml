@@ -3,12 +3,19 @@ description: >-
   Scans an image with a pinned Trivy and fails on fixable HIGH and CRITICAL findings. When Trivy
   or its vulnerability database cannot be downloaded, it skips the scan with a warning. For a private
   image, log in to its registry with docker/login-action first. Trivy reads that login from the
-  Docker config and sends it to that registry only. TRIVY_PLATFORM picks one image out of an index.
+  Docker config and sends it to that registry only. With image-ref, TRIVY_PLATFORM picks one image out of an index. With targets, each line names its platform.
   Trivy reads a .trivyignore in the working directory.
 inputs:
   image-ref:
-    description: The image to scan, by tag or digest
-    required: true
+    description: The image to scan, by tag or digest. Set this or targets
+    required: false
+    default: ''
+  targets:
+    description: >-
+      Newline-separated lines of an image reference and an optional platform such as linux/arm64,
+      separated by a space. The action scans every line and downloads the database once
+    required: false
+    default: ''
   skip-dirs:
     description: Comma-separated image paths the scanner skips entirely
     required: false
@@ -67,7 +74,6 @@ runs:
           tar -xzf "$tmp/$tarball" -C "$DIR" trivy
           echo "downloaded=true" >> "$GITHUB_OUTPUT"
         fi
-        # trivy-action runs the trivy it finds on PATH.
         sudo ln -sf "$DIR/trivy" /usr/local/bin/trivy
         trivy --version
         echo "installed=true" >> "$GITHUB_OUTPUT"
@@ -97,20 +103,47 @@ runs:
         fi
         echo "ready=true" >> "$GITHUB_OUTPUT"
 
-    # cache false: the action's own cache would restore an older database over the fresh one.
-    - name: scan the image
+    # The Trivy flags are the ones aquasecurity/trivy-action passed. The loop scans every target
+    # even after one fails, so one run reports all findings.
+    - name: scan the images
       if: steps.db.outputs.ready == 'true'
-      uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25  # v0.36.0
+      shell: bash
       env:
         TRIVY_SKIP_DB_UPDATE: 'true'
-      with:
-        image-ref: ${{ inputs.image-ref }}
-        skip-dirs: ${{ inputs.skip-dirs }}
-        skip-setup-trivy: true
-        cache: 'false'
-        cache-dir: ${{ steps.pin.outputs.cache-dir }}
-        format: table
-        exit-code: '1'
-        ignore-unfixed: true
-        vuln-type: os,library
-        severity: CRITICAL,HIGH
+        TRIVY_CACHE_DIR: ${{ steps.pin.outputs.cache-dir }}
+        IMAGE_REF: ${{ inputs.image-ref }}
+        TARGETS: ${{ inputs.targets }}
+        SKIP_DIRS: ${{ inputs.skip-dirs }}
+      run: |
+        set -euo pipefail
+        if [ -z "$TARGETS" ] && [ -z "$IMAGE_REF" ]; then
+          echo "::error::set image-ref or targets"
+          exit 1
+        fi
+        # Without targets, TRIVY_PLATFORM from the caller still picks the platform.
+        [ -n "$TARGETS" ] || TARGETS="$IMAGE_REF"
+        args=(--exit-code 1 --ignore-unfixed --severity "CRITICAL,HIGH" --pkg-types "os,library" --format table)
+        [ -z "$SKIP_DIRS" ] || args+=(--skip-dirs "$SKIP_DIRS")
+        failed=()
+        while read -r ref platform; do
+          [ -n "$ref" ] || continue
+          target_args=("${args[@]}")
+          [ -z "$platform" ] || target_args+=(--platform "$platform")
+          echo "::group::scan $ref ${platform}"
+          code=0
+          trivy image "${target_args[@]}" "$ref" || code=$?
+          echo "::endgroup::"
+          if [ "$code" -ne 0 ]; then
+            failed+=("$ref ${platform}")
+          fi
+        done <<< "$TARGETS"
+        if [ "${#failed[@]}" -gt 0 ]; then
+          {
+            echo "### Trivy found fixable HIGH or CRITICAL vulnerabilities"
+            echo
+            printf -- '- `%s`\n' "${failed[@]}"
+          } >> "$GITHUB_STEP_SUMMARY"
+          echo "::error::Trivy failed for ${#failed[@]} target(s):"
+          printf '%s\n' "${failed[@]}"
+          exit 1
+        fi
