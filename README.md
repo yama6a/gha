@@ -184,7 +184,9 @@ All four permissions are required; a reusable job gets only what the caller gran
 | `dockerfile` | `Dockerfile` |
 | `context` | `.` |
 | `platforms` | `linux/amd64,linux/arm64` |
-| `build-command` | none; runs on the runner before the build, Node from `.nvmrc`, npm |
+| `build-command` | none; runs on the runner before the build, with the tools `toolchain` picks |
+| `toolchain` | `node`; Node from `.nvmrc` and the npm store. `go` gives Go from `go.mod` and go-ci's caches, read-only |
+| `runner` | `ubuntu-latest`; a `go` caller passes `ubuntu-26.04-arm` |
 | `build-args` | none; newline `KEY=VALUE` |
 | `version` | none; use this string instead of the integer counter |
 | `create-release` | `true`; `false` when the caller publishes more artifacts and tags itself |
@@ -193,6 +195,40 @@ All four permissions are required; a reusable job gets only what the caller gran
 
 Every release moves `latest`, or the bare suffix with `tag-suffix`. Call the workflow from one branch only.
 Two calls with different `tag-suffix` values publish two images of one release, for example a full and a slim one.
+
+#### Go binaries built on the runner
+
+With `toolchain: go`, the `build-command` compiles on the runner from go-ci's warm caches. The
+Dockerfile only COPYs the binaries. A compile inside the Dockerfile starts from empty cache mounts
+on every release.
+
+```yaml
+jobs:
+  build-push:
+    uses: yama6a/gha/.github/workflows/docker-build-release.yaml@v2
+    with:
+      dockerfile: .build/Dockerfile
+      runner: ubuntu-26.04-arm
+      toolchain: go
+      build-command: make dist
+```
+
+```dockerfile
+FROM gcr.io/distroless/static:nonroot@sha256:<digest>
+ARG TARGETARCH
+COPY dist/linux-${TARGETARCH}/myapp /myapp
+```
+
+- Pass `runner: ubuntu-26.04-arm`. The cache key holds the runner arch, and go-ci runs on that
+  runner.
+- Compile each arch with exactly `CGO_ENABLED=0 GOOS=linux GOARCH=<arch> go build -trimpath`.
+  go-ci fills the cache with these flags, and any other compile flag misses it. `-ldflags` only
+  changes the link step, so `-ldflags='-s -w'` still hits.
+- Write `dist/linux-<arch>/<binary>` for every arch in `platforms`.
+- The cache is read-only here. go-ci saves it only from runs outside a pull request, so the
+  caller runs go-ci on the default branch.
+- A Dockerfile whose target stage only COPYs needs no QEMU on the arm runner. A `RUN` in the
+  amd64 stage runs under emulation.
 
 ### `docker-build-check.yaml`
 

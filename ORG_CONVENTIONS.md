@@ -44,7 +44,7 @@ them report on a PR, so the PR sits pending forever.
 
 ## Go
 
-- Go 1.27 in `go.mod` and in the Dockerfile; Renovate bumps the `go` directive.
+- Go 1.27 in `go.mod`, and in the Dockerfile when it compiles. Renovate bumps the `go` directive.
 - `uses: yama6a/gha/.github/workflows/go-ci.yaml@v2`, no inputs.
 - go-ci runs: `go mod tidy` drift, `go generate` drift, fmt, golangci-lint with the canonical
   config, vet, `go test -race -count=1` with coverage, govulncheck, cross-compile amd64 and arm64.
@@ -58,6 +58,10 @@ them report on a PR, so the PR sits pending forever.
   container per test process, a migrated template database, a clone per test.
 - image: `.build/Dockerfile`, `gcr.io/distroless/static:nonroot`. A binary that needs an OS
   (shelling out, glibc, CA tooling) uses debian-slim or alpine, digest-pinned.
+- a service image compiles on the runner: `docker-build-release.yaml` with `toolchain: go` and
+  `runner: ubuntu-26.04-arm`, a `build-command` that writes `dist/linux-<arch>/<binary>` with
+  `CGO_ENABLED=0 GOOS=linux GOARCH=<arch> go build -trimpath`, and a Dockerfile that only COPYs
+  it. The README section on `docker-build-release.yaml` says why.
 
 - Makefile: a copy of `templates/Makefile.go` from gha, repo extras added below it; `ci` runs
   the same checks as go-ci.

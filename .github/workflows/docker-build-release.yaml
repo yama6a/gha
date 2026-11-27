@@ -16,6 +16,14 @@ on:
         description: Shell command to run before the docker build, e.g. to produce a dist/ the Dockerfile only COPYs
         type: string
         default: ''
+      toolchain:
+        description: node gives the build-command Node from .nvmrc and the npm store. go gives it Go from go.mod and a read-only restore of go-ci's caches
+        type: string
+        default: node
+      runner:
+        description: Runner label of the job. A go toolchain caller passes ubuntu-26.04-arm, where go-ci saves its caches
+        type: string
+        default: ubuntu-latest
       version:
         description: Release version to use verbatim; empty computes the next integer from the latest release
         type: string
@@ -47,7 +55,7 @@ env:
 
 jobs:
   build-push:
-    runs-on: ubuntu-latest
+    runs-on: ${{ inputs.runner }}
     # A reusable workflow's jobs can request only what the caller grants here.
     permissions:
       contents: write  # required to create the GitHub release
@@ -86,9 +94,14 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           VERSION: ${{ inputs.version }}
           MOVING_TAGS: ${{ inputs.moving-tags }}
+          TOOLCHAIN: ${{ inputs.toolchain }}
         run: |
           set -euo pipefail
           source .gha/scripts/retry.sh
+          if [ "$TOOLCHAIN" != node ] && [ "$TOOLCHAIN" != go ]; then
+            echo "::error::toolchain must be node or go, got ${TOOLCHAIN}"
+            exit 1
+          fi
           if [ -n "$SUFFIX" ] && [[ ! $SUFFIX =~ ^-[a-z0-9][a-z0-9._-]*$ ]]; then
             echo "::error::tag-suffix must start with - and hold only a-z, 0-9, ., _ and -, got ${SUFFIX}"
             exit 1
@@ -119,13 +132,13 @@ jobs:
         run: rm -rf .gha  # the build command sees the caller's checkout only
 
       - name: Set up Node
-        if: inputs.build-command != ''
+        if: inputs.build-command != '' && inputs.toolchain == 'node'
         uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
         with:
           node-version-file: .nvmrc
 
       - name: Restore the npm store
-        if: inputs.build-command != ''
+        if: inputs.build-command != '' && inputs.toolchain == 'node'
         id: npm-cache
         uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
@@ -133,6 +146,28 @@ jobs:
           key: npm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('package-lock.json') }}
           restore-keys: |
             npm-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Set up Go
+        if: inputs.build-command != '' && inputs.toolchain == 'go'
+        id: go
+        uses: actions/setup-go@d8cbb8045d7f43706b9177cceb36c1f91a6644d5  # v7.1.0
+        with:
+          go-version-file: go.mod
+          cache: false  # the next step restores go-ci's caches instead
+
+      # Restore only. go-ci is the one writer, so two workflows never race for one write-once key.
+      - name: Restore the Go caches
+        if: inputs.build-command != '' && inputs.toolchain == 'go'
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: |
+            ~/go/pkg/mod
+            ~/.cache/go-build
+          # Paths, key and restore-keys must equal the restore step in go-ci.yaml, or this never hits.
+          key: go-v1-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('**/go.sum') }}
+          restore-keys: |
+            go-v1-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-
+            go-v1-${{ runner.arch }}-
 
       # Built here, not in the Dockerfile: the image only COPYs the build output, so this runs once on the
       # runner instead of once per target arch under emulation.
@@ -143,7 +178,7 @@ jobs:
 
       # Same guard as the restore: its outputs are empty when it was skipped.
       - name: Save the npm store
-        if: inputs.build-command != '' && steps.npm-cache.outputs.cache-hit != 'true'
+        if: inputs.build-command != '' && inputs.toolchain == 'node' && steps.npm-cache.outputs.cache-hit != 'true'
         uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
         with:
           path: ~/.npm

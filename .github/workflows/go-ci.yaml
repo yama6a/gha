@@ -29,6 +29,7 @@ jobs:
           path: |
             ~/go/pkg/mod
             ~/.cache/go-build
+          # docker-build-release.yaml restores the same paths and keys read-only. Change both files together.
           key: go-v1-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-${{ hashFiles('**/go.sum') }}
           # Bump go-v1 to drop the old module versions a prefix match keeps carrying forward.
           restore-keys: |
