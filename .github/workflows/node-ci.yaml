@@ -122,3 +122,18 @@ jobs:
             if [ -n "$pair" ]; then export "${pair?}"; fi
           done <<< "$BUILD_ENV"
           npm run build
+
+      # Last, and fetched again, because the validation pins Node 24 on PATH for every later step.
+      # Earlier, it would make Audit and Build run on Node 24 instead of the repo's .nvmrc version.
+      - name: Fetch the Renovate config validation
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+          repository: ${{ job.workflow_repository }}
+          ref: ${{ job.workflow_sha }}
+          path: .gha
+          sparse-checkout: .github/actions/validate-renovate-config
+          sparse-checkout-cone-mode: false
+
+      - name: Validate the Renovate config
+        uses: ./.gha/.github/actions/validate-renovate-config

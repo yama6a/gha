@@ -43,6 +43,7 @@ jobs:
           ref: ${{ job.workflow_sha }}
           path: .gha
           sparse-checkout: |
+            .github/actions/validate-renovate-config
             scripts/retry.sh
           sparse-checkout-cone-mode: false
 
@@ -68,6 +69,11 @@ jobs:
           set -euo pipefail
           source .gha/scripts/retry.sh
           retry_run "$RETRY_NETWORK" 5 composer audit
+
+      # One shard is enough: the config does not depend on the PHP version.
+      - name: Validate the Renovate config
+        if: matrix.php == fromJSON(inputs.php-versions)[0]
+        uses: ./.gha/.github/actions/validate-renovate-config
 
       - name: Drop the shared actions checkout
         run: rm -rf .gha  # the composer scripts see the caller's checkout only
