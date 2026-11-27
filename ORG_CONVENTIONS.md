@@ -117,7 +117,10 @@ them report on a PR, so the PR sits pending forever.
 - API types are generated from the committed spec, and CI fails if the committed output drifts.
 - an eslint or TypeScript version hold lives in the repo that has the blocker, with the blocker
   named next to it. Never in the shared Renovate preset.
-- `uses: yama6a/gha/.github/workflows/node-ci.yaml@v2`.
+- `uses: yama6a/gha/.github/workflows/node-ci.yaml@v2` on `pull_request` only.
+- `.github/workflows/warm-cache.yaml` calls node-ci with `warm-cache: true` on a push to the
+  default branch that changes `package-lock.json`. A repo with Playwright calls
+  `playwright-e2e.yaml` there instead.
 - a high or critical npm audit advisory no released version can clear goes in
   `.npm-audit-ignore`, one GHSA id per line, reason after a `#`.
 - Playwright through `playwright-e2e.yaml@v2`, with a caller-side `.github/workflows/warm-cache.yaml`

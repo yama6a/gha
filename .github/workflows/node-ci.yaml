@@ -18,11 +18,16 @@ on:
       runner:
         type: string
         default: ubuntu-24.04-arm
+      warm-cache:
+        description: Run only the cache-warming job, skip the checks
+        type: boolean
+        default: false
 
 jobs:
   check:
     # Required-check context: the steps grow, the name does not.
     name: node
+    if: ${{ !inputs.warm-cache }}
     runs-on: ${{ inputs.runner }}
     timeout-minutes: 15
     defaults:
@@ -137,3 +142,41 @@ jobs:
 
       - name: Validate the Renovate config
         uses: ./.gha/.github/actions/validate-renovate-config
+
+  warm:
+    if: ${{ inputs.warm-cache }}
+    name: warm the caches
+    runs-on: ${{ inputs.runner }}
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: ${{ inputs.working-directory }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Set up Node
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1  # v7.1.0
+        with:
+          node-version-file: ${{ inputs.working-directory }}/.nvmrc
+
+      - name: Restore the npm store
+        id: npm-cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.npm
+          key: npm-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles(format('{0}/package-lock.json', inputs.working-directory)) }}
+          restore-keys: |
+            npm-${{ runner.os }}-${{ runner.arch }}-
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Never from a pull_request: that scope is readable by the one PR and nothing after it.
+      - name: Save the npm store
+        if: github.event_name != 'pull_request' && steps.npm-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
+        with:
+          path: ~/.npm
+          key: ${{ steps.npm-cache.outputs.cache-primary-key }}

@@ -142,6 +142,30 @@ jobs:
 | `working-directory` | `.` |
 | `build-env` | none; newline `KEY=VALUE`, exported for the build step only |
 | `runner` | `ubuntu-24.04-arm` |
+| `warm-cache` | `false`; `true` runs only `npm ci` and saves the npm store |
+
+PR caches are private to their PR. So the caller runs `node-ci` on `pull_request` only, and warms the
+default-branch npm store whenever the lockfile changes there. A repo with Playwright warms through
+`playwright-e2e.yaml` instead, which fills the same npm store.
+
+```yaml
+# .github/workflows/warm-cache.yaml
+name: warm-cache
+on:
+  push:
+    branches: [main]
+    paths: ['package-lock.json']
+concurrency:
+  group: warm-cache
+  cancel-in-progress: true
+permissions:
+  contents: read
+jobs:
+  warm:
+    uses: yama6a/gha/.github/workflows/node-ci.yaml@v2
+    with:
+      warm-cache: true
+```
 
 ### `php-ci.yaml`
 
