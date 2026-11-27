@@ -50,8 +50,9 @@ them report on a PR, so the PR sits pending forever.
 - go-ci runs: `go mod tidy` drift, `go generate` drift, fmt, golangci-lint with the canonical
   config, vet, `go test -count=1` with coverage and `-race`, govulncheck, cross-compile amd64 and
   arm64 with `-trimpath`. `race: false` drops `-race`.
-- `.github/workflows/warm-cache.yaml` calls go-ci with `mode: warm-cache`, weekly on a schedule
-  and on `workflow_dispatch`. It fills the caches that PRs and releases read.
+- `.github/workflows/warm-cache.yaml` calls go-ci with `mode: warm-cache` and the same `race`
+  value as the PR workflow, weekly on a schedule and on `workflow_dispatch`. It fills the caches
+  that PRs and releases read.
 - a repo with `race: false` has `.github/workflows/race.yaml`, which calls go-ci with
   `mode: race` weekly on a schedule.
 - each scheduled workflow picks its own minute, never `0`.

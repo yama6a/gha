@@ -28,7 +28,7 @@ jobs:
 | input | default |
 |---|---|
 | `mode` | `check`; `race` and `warm-cache` are for the scheduled workflows below |
-| `race` | `true`; `false` drops `-race` from the `check` mode's tests |
+| `race` | `true`; `false` drops `-race` from the `check` mode's tests and the `warm-cache` mode's test builds |
 
 The job is named `go` in every mode, so the required context stays `go / go`.
 
@@ -36,14 +36,14 @@ The job is named `go` in every mode, so the required context stays `go / go`.
 |---|---|---|
 | `check` | every check above | the Go caches on a miss of the exact key, and the lint cache. Never from a `pull_request` |
 | `race` | `go test ./... -race -count=1` only | nothing |
-| `warm-cache` | golangci-lint. On a miss of the exact Go cache key also `go mod download`, `go build ./...`, the test packages through `go test -c -cover` without running them, and the cross-compile | the Go caches on a miss, and the lint cache |
+| `warm-cache` | golangci-lint. On a miss of the exact Go cache key also `go mod download`, `go build ./...`, the test packages through `go test -c -cover` without running them, with `-race` unless `race: false`, and the cross-compile | the Go caches on a miss, and the lint cache |
 
 A PR run can read only the caches saved on the default branch. GitHub drops an entry after 7 days
 without use, and the golangci-lint key changes every 7 days. So the caller runs `check` on
 `pull_request` only, and a weekly `warm-cache` run fills both caches:
 
-- The test packages compile with `-cover` and without `-race`. A `check` run with `race: false`
-  reuses them. With `race: true`, a PR compiles the race builds of the test packages itself.
+- The test packages compile with the `check` mode's flags for the same `race` input, so PR runs
+  reuse them. Pass the same `race` value in `warm-cache.yaml` as in the PR workflow.
 - docker-build-release.yaml reads the same cache entries, because its release build uses the
   cross-compile flags.
 
@@ -64,6 +64,7 @@ jobs:
     uses: yama6a/gha/.github/workflows/go-ci.yaml@v2
     with:
       mode: warm-cache
+      # race: false  # the same value as the PR workflow
 ```
 
 A repo that passes `race: false` also runs the race tests weekly on the default branch:

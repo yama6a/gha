@@ -8,7 +8,7 @@ on:
         type: string
         default: check
       race:
-        description: Run the check mode's tests with the race detector
+        description: Use the race detector in the check mode's tests and the warm-cache mode's test builds
         type: boolean
         default: true
 
@@ -54,17 +54,6 @@ jobs:
           restore-keys: |
             go-v1-${{ runner.arch }}-${{ steps.go.outputs.go-version }}-
             go-v1-${{ runner.arch }}-
-
-      - name: Look up the exact Go cache key
-        if: inputs.mode == 'warm-cache'
-        id: gokey
-        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9  # v6.1.0
-        with:
-          path: |
-            ~/go/pkg/mod
-            ~/.cache/go-build
-          key: ${{ steps.gocache.outputs.cache-primary-key }}
-          lookup-only: true
 
       # A stale go.mod/go.sum still builds, so nothing else here would catch it.
       # Runs before go generate, which can edit go.mod through `go run -mod=mod`.
@@ -205,25 +194,33 @@ jobs:
         run: /tmp/govulncheck.sh
 
       - name: Download the modules
-        if: inputs.mode == 'warm-cache' && steps.gokey.outputs.cache-hit != 'true'
+        if: inputs.mode == 'warm-cache' && steps.gocache.outputs.cache-hit != 'true'
         run: go mod download
 
       - name: Build
-        if: inputs.mode == 'warm-cache' && steps.gokey.outputs.cache-hit != 'true'
+        if: inputs.mode == 'warm-cache' && steps.gocache.outputs.cache-hit != 'true'
         run: go build ./...
 
-      # -c compiles without running anything. -run '^$' would still run a TestMain. -cover matches
-      # the check mode's -coverprofile without -race, so those PR runs hit these entries. /dev/null,
+      # -c compiles without running anything. -run '^$' would still run a TestMain. The flags match
+      # the check mode's tests for the same race input, so PR runs hit these entries. /dev/null,
       # because two packages of one name cannot both write into an -o directory.
       - name: Build the test binaries
-        if: inputs.mode == 'warm-cache' && steps.gokey.outputs.cache-hit != 'true'
-        run: go test -c -cover -o /dev/null ./...
+        if: inputs.mode == 'warm-cache' && steps.gocache.outputs.cache-hit != 'true'
+        env:
+          RACE: ${{ inputs.race }}
+        run: |
+          set -euo pipefail
+          if [ "$RACE" = true ]; then
+            go test -c -race -cover -o /dev/null ./...
+          else
+            go test -c -cover -o /dev/null ./...
+          fi
 
       # Every Go repo here ships a multi-arch image, and CI runs on one arch, so a
       # compile error on the other would first surface at release time. The flags equal the
       # release build's in docker-build-release.yaml, so it reads these cache entries.
       - name: Cross-compile
-        if: inputs.mode == 'check' || (inputs.mode == 'warm-cache' && steps.gokey.outputs.cache-hit != 'true')
+        if: inputs.mode == 'check' || (inputs.mode == 'warm-cache' && steps.gocache.outputs.cache-hit != 'true')
         run: |
           set -euo pipefail
           pids=()
