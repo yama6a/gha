@@ -687,6 +687,11 @@ Pinned `renovate-config-validator --strict`. go-ci, node-ci and php-ci run it as
 inputs, so a caller needs no `renovate-config` job. On `pull_request` and `push` it first diffs the
 changed files and skips the validator (the step, not the job, so a required `renovate-config`
 check still reports green) unless a config file changed. Every other event validates.
+The diff base is the pull request's base commit, or the push's `before` commit. A push that
+creates a branch or tag has no `before`, so it validates.
+
+The action fetches the diff base itself with the job token, so a shallow checkout with
+`persist-credentials: false` works, also in a private repo. The job needs `contents: read`.
 
 ```yaml
 - uses: yama6a/gha/.github/actions/validate-renovate-config@v2

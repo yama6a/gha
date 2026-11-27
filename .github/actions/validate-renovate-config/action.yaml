@@ -39,13 +39,44 @@ runs:
           echo 'FILTERS'
         } >> "$GITHUB_OUTPUT"
 
+    # paths-filter fetches a missing base commit with plain git. Callers check out with
+    # persist-credentials: false, so in a private repo that fetch has no credentials and fails.
+    # This step fetches the base with the job token instead, and paths-filter then finds it locally.
+    - name: Fetch the diff base
+      id: base
+      shell: bash
+      working-directory: ${{ github.workspace }}
+      env:
+        EVENT: ${{ github.event_name }}
+        PR_BASE: ${{ github.event.pull_request.base.sha }}
+        PUSH_BEFORE: ${{ github.event.before }}
+        GH_TOKEN: ${{ github.token }}
+        GIT_TERMINAL_PROMPT: '0'
+      run: |
+        set -euo pipefail
+        base=''
+        case "$EVENT" in
+          pull_request) base=$PR_BASE ;;
+          push) [[ $PUSH_BEFORE =~ ^0+$ ]] || base=$PUSH_BEFORE ;;  # all zeros: a new branch or tag has no before
+        esac
+        if [ -n "$base" ] && ! git cat-file -e "$base^{commit}" 2> /dev/null; then
+          # Git asks a credential helper only after a 401. A checkout that kept its credentials
+          # so sends only those, never a second Authorization header.
+          # shellcheck disable=SC2016
+          git -c credential.helper= \
+            -c credential.helper='!f() { echo username=x-access-token; echo "password=$GH_TOKEN"; }; f' \
+            fetch --no-tags --depth=1 origin "$base"
+        fi
+        echo "sha=$base" >> "$GITHUB_OUTPUT"
+
     - name: Did the config change
       id: filter
-      # Only these two events carry a base to diff against; everything else validates unconditionally.
-      if: github.event_name == 'pull_request' || github.event_name == 'push'
+      # Only pull_request and push carry a base to diff against. Every other event validates unconditionally.
+      if: steps.base.outputs.sha != ''
       uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
       with:
         token: ''  # git diff instead of the PR files API, which needs pull-requests: read from every caller
+        base: ${{ steps.base.outputs.sha }}  # a push to another branch would otherwise make paths-filter fetch the default branch
         filters: ${{ steps.paths.outputs.filters }}
 
     - name: Pin Node for npx
