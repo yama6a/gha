@@ -8,9 +8,9 @@ on:
         type: string
         default: check
       race:
-        description: Use the race detector in the check mode's tests and the warm-cache mode's test builds
+        description: Use the race detector in the check mode's tests and the warm-cache mode's test builds. PR runs leave it off, and the weekly race mode always races
         type: boolean
-        default: true
+        default: false
 
 jobs:
   check:

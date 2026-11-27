@@ -45,16 +45,14 @@ them report on a PR, so the PR sits pending forever.
 ## Go
 
 - Go 1.27 in `go.mod`, and in the Dockerfile when it compiles. Renovate bumps the `go` directive.
-- `uses: yama6a/gha/.github/workflows/go-ci.yaml@v2` on `pull_request` only. A private repo
-  passes `race: false`.
+- `uses: yama6a/gha/.github/workflows/go-ci.yaml@v2` on `pull_request` only. PR runs never race.
 - go-ci runs: `go mod tidy` drift, `go generate` drift, fmt, golangci-lint with the canonical
-  config, vet, `go test -count=1` with coverage and `-race`, govulncheck, cross-compile amd64 and
-  arm64 with `-trimpath`. `race: false` drops `-race`.
-- `.github/workflows/warm-cache.yaml` calls go-ci with `mode: warm-cache` and the same `race`
-  value as the PR workflow, weekly on a schedule and on `workflow_dispatch`. It fills the caches
-  that PRs and releases read.
-- a repo with `race: false` has `.github/workflows/race.yaml`, which calls go-ci with
-  `mode: race` weekly on a schedule.
+  config, vet, `go test -count=1` with coverage, govulncheck, cross-compile amd64 and
+  arm64 with `-trimpath`. The `race` input defaults to `false`, so no PR run uses `-race`.
+- `.github/workflows/warm-cache.yaml` calls go-ci with `mode: warm-cache`, weekly on a schedule
+  and on `workflow_dispatch`. It fills the caches that PRs and releases read.
+- every Go repo has `.github/workflows/race.yaml`, which calls go-ci with `mode: race` weekly on a
+  schedule. A failed weekly run alerts through gha-status-exporter.
 - each scheduled workflow picks its own minute, never `0`.
 - no local `.golangci.yaml`. A repo-specific delta goes in `.golangci.local.yaml`, merged on top.
 - a govulncheck finding no released version can clear goes in `.govulncheck-ignore`, one OSV id
