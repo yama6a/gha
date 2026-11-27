@@ -249,7 +249,8 @@ jobs:
       packages: read  # pulls a private image
 ```
 
-The workflow scans every platform in each tag's manifest list, one job per tag and platform.
+The workflow scans every platform in each tag's manifest list in one job named `scan`.
+The job fails after it has scanned every target, and it lists the failing targets in its log and job summary.
 It reads `.trivyignore` from the default branch. A failed run reruns with `gh run rerun <id> --failed`.
 
 | input | default |
@@ -464,10 +465,12 @@ finding still fails the step.
 
 ### `actions/trivy-scan`
 
-Pinned Trivy over one image. It fails on HIGH and CRITICAL findings that have a fixed version.
+Pinned Trivy over one image, or over a list of image and platform pairs. It fails on HIGH and CRITICAL findings that have a fixed version.
 The binary is cached in the Actions cache. The download of the binary from GitHub and of the
 vulnerability database each get three tries in about a minute. When either still fails, the action
-skips the scan with a warning. `image-scan.yaml` runs it.
+skips the scan with a warning. The database downloads once, however many targets there are.
+The action scans every target even after one fails, then fails and lists the failing targets in the log
+and in the job summary. `image-scan.yaml` runs it.
 Renovate bumps `TRIVY_VERSION` in the action.
 
 A caller can accept a finding in `.trivyignore` at the repo root, one CVE id per line with the
@@ -491,7 +494,8 @@ includes the `mirror.gcr.io` copy of its vulnerability database.
 
 | input | default |
 |---|---|
-| `image-ref` | required |
+| `image-ref` | none; one image by tag or digest. Set this or `targets` |
+| `targets` | none; newline-separated lines of `<image-ref> <platform>`, for example `ghcr.io/owner/repo:1 linux/arm64` |
 | `skip-dirs` | none; comma-separated image paths Trivy skips |
 
 ### `actions/workflow-security`
