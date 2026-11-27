@@ -125,8 +125,9 @@ jobs:
           sudo mv "$dir/$name/golangci-lint" /usr/local/bin/
           golangci-lint --version
 
-      # `*+` appends arrays, so .golangci.local.yaml lists only its additions. .gha goes away
-      # here so the cross-compile and any later git diff never see it.
+      # `*+` appends arrays, so .golangci.local.yaml lists only its additions. .gha stays to the
+      # job end: the runner reads validate-renovate-config's action.yaml again for its post step.
+      # Go tools skip dot folders in ./..., so lint, vet, tests and the cross-compile never see it.
       - name: Stage the lint config and scripts
         if: inputs.mode != 'race'
         run: |
@@ -143,7 +144,6 @@ jobs:
             cp .gha/.golangci.yaml /tmp/golangci.yaml
           fi
           install -m 0755 .gha/scripts/govulncheck.sh /tmp/govulncheck.sh
-          rm -rf .gha
 
       # Its cache key changes every 7 days, so warm-cache runs it even when the Go cache key exists.
       - name: Run golangci-lint

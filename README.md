@@ -783,6 +783,10 @@ creates a branch or tag has no `before`, so it validates.
 The action fetches the diff base itself with the job token, so a shallow checkout with
 `persist-credentials: false` works, also in a private repo. The job needs `contents: read`.
 
+A job that checks this action out and runs it by local path, as go-ci and php-ci do, must keep
+that folder until the job ends. The runner reads the action's `action.yaml` again for the post
+step of `actions/setup-node`, and fails the job when the file is gone.
+
 ```yaml
 - uses: yama6a/gha/.github/actions/validate-renovate-config@v2
   # with:
