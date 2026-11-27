@@ -48,7 +48,7 @@ them report on a PR, so the PR sits pending forever.
 - `uses: yama6a/gha/.github/workflows/go-ci.yaml@v2` on `pull_request` only. PR runs never race.
 - go-ci runs: `go mod tidy` drift, `go generate` drift, fmt, golangci-lint with the canonical
   config, vet, `go test -count=1` with coverage, govulncheck, cross-compile amd64 and
-  arm64 with `-trimpath`. The `race` input defaults to `false`, so no PR run uses `-race`.
+  arm64 with `-trimpath`. The `check` mode never uses `-race`.
 - `.github/workflows/warm-cache.yaml` calls go-ci with `mode: warm-cache`, weekly on a schedule
   and on `workflow_dispatch`. It fills the caches that PRs and releases read.
 - every Go repo has `.github/workflows/race.yaml`, which calls go-ci with `mode: race` weekly on a

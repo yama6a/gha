@@ -23,13 +23,12 @@ jobs:
     uses: yama6a/gha/.github/workflows/go-ci.yaml@v2
 ```
 
-A PR run never uses `-race`. Every Go repo runs the race tests weekly through `race.yaml` below. A
+The `check` mode never uses `-race`. Every Go repo runs the race tests weekly through `race.yaml` below. A
 failed weekly run alerts through gha-status-exporter.
 
 | input | default |
 |---|---|
 | `mode` | `check`; `race` and `warm-cache` are for the scheduled workflows below |
-| `race` | `false`; `true` adds `-race` to the `check` mode's tests and the `warm-cache` mode's test builds. Callers leave it unset |
 
 The job is named `go` in every mode, so the required context stays `go / go`.
 
@@ -37,14 +36,13 @@ The job is named `go` in every mode, so the required context stays `go / go`.
 |---|---|---|
 | `check` | every check above | the Go caches on a miss of the exact key, and the lint cache. Never from a `pull_request` |
 | `race` | `go test ./... -race -count=1` only | nothing |
-| `warm-cache` | golangci-lint. On a miss of the exact Go cache key also `go mod download`, `go build ./...`, the test packages through `go test -c -cover` without running them, with `-race` only when `race: true`, and the cross-compile | the Go caches on a miss, and the lint cache |
+| `warm-cache` | golangci-lint. On a miss of the exact Go cache key also `go mod download`, `go build ./...`, the test packages through `go test -c -cover` without running them, and the cross-compile | the Go caches on a miss, and the lint cache |
 
 A PR run can read only the caches saved on the default branch. GitHub drops an entry after 7 days
 without use, and the golangci-lint key changes every 7 days. So the caller runs `check` on
 `pull_request` only, and a weekly `warm-cache` run fills both caches:
 
-- The `warm-cache` mode follows the `race` input. With the default `false` it builds test binaries
-  without `-race`, which are the ones PR runs reuse.
+- The `warm-cache` mode builds test binaries without `-race`, which are the ones PR runs reuse.
 - docker-build-release.yaml reads the same cache entries, because its release build uses the
   cross-compile flags.
 
